@@ -1,0 +1,22 @@
+{
+  "name": "tshirt-store",
+  "version": "1.0.0",
+  "description": "MERN T-Shirt E-Commerce Store",
+  "engines": {
+    "node": "20.x"
+  },
+  "scripts": {
+    "start": "cd server && node server.js",
+    "server": "cd server && node server.js",
+    "server:dev": "cd server && npx nodemon server.js",
+    "client": "cd client && npm run dev",
+    "dev": "concurrently \"npm run server:dev\" \"npm run client\"",
+    "install:all": "npm install && cd server && npm install && cd ../client && npm install",
+    "seed": "cd server && node seed.js",
+    "build": "cd client && npm run build",
+    "heroku-postbuild": "cd server && npm install && cd ../client && npm install --include=dev && npm run build"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

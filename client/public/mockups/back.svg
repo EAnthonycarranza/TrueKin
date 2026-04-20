@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 810 810" width="810" height="810">
+  <defs>
+    <!-- Radial gradient for fabric depth (lighter center, darker edges) -->
+    <radialGradient id="bg" cx="0.5" cy="0.38" r="0.55" fx="0.5" fy="0.32">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.45" stop-color="#FDFDFD"/>
+      <stop offset="0.75" stop-color="#F6F6F6"/>
+      <stop offset="1" stop-color="#EBEBEB"/>
+    </radialGradient>
+    <!-- Drop shadow filter -->
+    <filter id="ds" x="-8%" y="-5%" width="116%" height="120%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="12" result="b"/>
+      <feOffset in="b" dx="0" dy="8" result="o"/>
+      <feComponentTransfer in="o" result="f">
+        <feFuncA type="linear" slope="0.1"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode in="f"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <!-- Subtle inner shadow for edge depth -->
+    <filter id="is" x="-2%" y="-2%" width="104%" height="104%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="6" result="b"/>
+      <feOffset in="b" dx="0" dy="3"/>
+      <feComposite operator="out" in2="SourceAlpha" result="s"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.06"/>
+      </feComponentTransfer>
+      <feComposite operator="atop" in2="SourceGraphic"/>
+    </filter>
+  </defs>
+
+  <!-- Main t-shirt body (back - shallower neckline) with gradient + drop shadow -->
+  <path d="M 403.492188 739.769531 C 387.246094 739.769531 254.289062 739.105469 183.003906 728.164062 C 183.003906 728.164062 187.3125 587.5625 188.640625 535.828125 C 189.636719 483.765625 192.949219 330.5625 192.949219 330.5625 L 128.296875 381.964844 C 128.296875 381.964844 57.671875 329.238281 8.933594 244.015625 C 8.933594 244.015625 144.875 129.941406 174.050781 113.359375 C 204.886719 95.785156 300.375 70.25 300.375 70.25 C 300.375 70.25 354.160156 85.121094 405.152344 85.121094 L 406.808594 85.121094 C 457.136719 85.121094 509.925781 70.25 509.925781 70.25 C 509.925781 70.25 605.414062 95.785156 636.25 113.359375 C 665.425781 129.941406 801.367188 244.015625 801.367188 244.015625 C 752.628906 329.238281 682.003906 381.964844 682.003906 381.964844 L 617.351562 330.5625 C 617.351562 330.5625 620.667969 483.765625 621.992188 535.828125 C 623.320312 587.890625 627.628906 728.164062 627.628906 728.164062 C 551.371094 739.769531 405.480469 739.769531 405.480469 739.769531 Z"
+    fill="url(#bg)" filter="url(#ds)"/>
+
+  <!-- Inner shadow overlay for depth -->
+  <path d="M 403.492188 739.769531 C 387.246094 739.769531 254.289062 739.105469 183.003906 728.164062 C 183.003906 728.164062 187.3125 587.5625 188.640625 535.828125 C 189.636719 483.765625 192.949219 330.5625 192.949219 330.5625 L 128.296875 381.964844 C 128.296875 381.964844 57.671875 329.238281 8.933594 244.015625 C 8.933594 244.015625 144.875 129.941406 174.050781 113.359375 C 204.886719 95.785156 300.375 70.25 300.375 70.25 C 300.375 70.25 354.160156 85.121094 405.152344 85.121094 L 406.808594 85.121094 C 457.136719 85.121094 509.925781 70.25 509.925781 70.25 C 509.925781 70.25 605.414062 95.785156 636.25 113.359375 C 665.425781 129.941406 801.367188 244.015625 801.367188 244.015625 C 752.628906 329.238281 682.003906 381.964844 682.003906 381.964844 L 617.351562 330.5625 C 617.351562 330.5625 620.667969 483.765625 621.992188 535.828125 C 623.320312 587.890625 627.628906 728.164062 627.628906 728.164062 C 551.371094 739.769531 405.480469 739.769531 405.480469 739.769531 Z"
+    fill="transparent" filter="url(#is)"/>
+
+  <!-- Collar / Neckline (back - shallower, rounder) -->
+  <path d="M 300 70 C 330 60 365 55 405 55 C 445 55 480 60 510 70"
+    fill="none" stroke="#DADADA" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M 304 73 C 335 63 368 58 405 58 C 442 58 475 63 506 73"
+    fill="none" stroke="#E8E8E8" stroke-width="2" stroke-linecap="round"/>
+  <!-- Back collar tag/label indicator -->
+  <rect x="395" y="58" width="20" height="10" rx="1.5" fill="rgba(0,0,0,0.04)"/>
+
+  <!-- Shoulder seam stitching (dashed) -->
+  <path d="M 174 113 Q 237 100 300 70"
+    fill="none" stroke="rgba(0,0,0,0.07)" stroke-width="1.5" stroke-dasharray="5,4" stroke-linecap="round"/>
+  <path d="M 636 113 Q 573 100 510 70"
+    fill="none" stroke="rgba(0,0,0,0.07)" stroke-width="1.5" stroke-dasharray="5,4" stroke-linecap="round"/>
+
+  <!-- Sleeve hems -->
+  <path d="M 128 382 Q 160 356 193 331"
+    fill="none" stroke="rgba(0,0,0,0.05)" stroke-width="2" stroke-linecap="round"/>
+  <path d="M 682 382 Q 650 356 617 331"
+    fill="none" stroke="rgba(0,0,0,0.05)" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Side seams (very subtle) -->
+  <line x1="193" y1="335" x2="183" y2="728"
+    stroke="rgba(0,0,0,0.025)" stroke-width="1"/>
+  <line x1="617" y1="335" x2="628" y2="728"
+    stroke="rgba(0,0,0,0.025)" stroke-width="1"/>
+
+  <!-- Bottom hem -->
+  <path d="M 183 728 C 254 739 387 740 405 740 C 423 740 551 740 628 728"
+    fill="none" stroke="rgba(0,0,0,0.07)" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- Back center seam line (very subtle) -->
+  <line x1="405" y1="65" x2="405" y2="735"
+    stroke="rgba(0,0,0,0.015)" stroke-width="1"/>
+
+  <!-- Subtle horizontal fabric folds -->
+  <path d="M 280 250 Q 405 242 530 250"
+    fill="none" stroke="rgba(0,0,0,0.015)" stroke-width="1.5"/>
+  <path d="M 240 420 Q 405 412 570 420"
+    fill="none" stroke="rgba(0,0,0,0.012)" stroke-width="1"/>
+  <path d="M 220 580 Q 405 573 590 580"
+    fill="none" stroke="rgba(0,0,0,0.01)" stroke-width="1"/>
+</svg>
