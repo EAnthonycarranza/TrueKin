@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Eye, Package } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { statusLabel, pickupPaymentDue } from '../../utils/fulfillment';
 import { api } from '../../api/client';
 import AdminLayout from '../../components/AdminLayout';
 
@@ -12,6 +13,8 @@ const statusBadge = {
   shipped: 'badge-info',
   delivered: 'badge-success',
   cancelled: 'badge-danger',
+  ready_for_pickup: 'badge-warning',
+  picked_up: 'badge-success',
 };
 
 export default function AdminOrders() {
@@ -116,7 +119,7 @@ export default function AdminOrders() {
                       </td>
                       <td data-label="Status">
                         <span className={`badge ${statusBadge[order.status] || 'badge-gray'}`}>
-                          {order.status}
+                          {statusLabel(order.status)}
                         </span>
                       </td>
                       <td data-label="Tracking">

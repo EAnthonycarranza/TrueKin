@@ -15,6 +15,7 @@ import {
   QrCode,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { statusLabel, pickupPaymentDue } from '../../utils/fulfillment';
 import { api } from '../../api/client';
 import AdminLayout from '../../components/AdminLayout';
 
@@ -25,6 +26,8 @@ const statusBadge = {
   shipped: 'badge-info',
   delivered: 'badge-success',
   cancelled: 'badge-danger',
+  ready_for_pickup: 'badge-warning',
+  picked_up: 'badge-success',
 };
 
 const trackingStatusColor = {
@@ -184,7 +187,7 @@ export default function AdminOrderDetail() {
           </div>
           <div className="admin-order-detail-badges" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <span className={`badge ${statusBadge[order.status] || 'badge-gray'}`} style={{ fontSize: 13, padding: '6px 14px' }}>
-              {order.status}
+              {statusLabel(order.status)}
             </span>
             {order.trackingStatus && (
               <span

@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const { pickupContact } = require('./fulfillment');
 
 let cachedTransporter = null;
 
@@ -109,6 +110,57 @@ function trackUrl(order) {
   return `${base}/track?order=${order._id}&email=${email}`;
 }
 
+/** Greeting name: pickup orders have no shippingAddress, so use who's collecting. */
+function firstName(order) {
+  const name = order.shippingAddress?.name || order.pickup?.contactName || '';
+  return name.trim().split(/\s+/)[0] || 'friend';
+}
+
+/**
+ * Address block for the confirmation email.
+ *
+ * Pickup orders have no shippingAddress — it isn't required on the model — so
+ * rendering the shipping block for them produced an empty box with no hint of
+ * where or when to collect. Pickup orders get the saved location snapshot,
+ * its hours and instructions, and the coordinator to contact instead.
+ */
+function fulfillmentBlock(order) {
+  const box = (heading, inner) => `
+    <div style="margin-bottom:32px;padding:24px;background-color:#ffffff;border:1.5px solid #d9d3c2;border-left:4px solid #0a0a0a;">
+      <h3 style="font-size:11px;font-weight:800;margin:0 0 12px;text-transform:uppercase;letter-spacing:0.15em;color:#8a8578;">${heading}</h3>
+      ${inner}
+    </div>`;
+  const muted = (t) => `<span style="color:#5a564c;font-weight:500;">${t}</span>`;
+
+  if (order.fulfillmentMethod === 'pickup' && order.pickup) {
+    const p = order.pickup;
+    const contact = pickupContact(p);
+    const line = (label, value) => value
+      ? `<p style="margin:12px 0 0;color:#0a0a0a;line-height:1.6;font-size:14px;"><strong>${label}</strong><br/>${muted(escapeHtml(value).replace(/\n/g, '<br/>'))}</p>`
+      : '';
+    return box('Pickup Details', `
+      <p style="margin:0;color:#0a0a0a;line-height:1.6;font-size:14px;font-weight:600;">
+        ${escapeHtml(p.name || '')}<br/>
+        ${muted(`${escapeHtml(p.street || '')}<br/>${escapeHtml(p.city || '')}, ${escapeHtml(p.state || '')} ${escapeHtml(p.zip || '')}`)}
+      </p>
+      ${line('Hours', p.hours)}
+      ${line('Pickup instructions', p.instructions)}
+      ${line('Instructions for your order', p.orderInstructions)}
+      <p style="margin:12px 0 0;color:#0a0a0a;line-height:1.6;font-size:14px;">
+        <strong>Coordinate with</strong><br/>
+        ${muted(`${escapeHtml(contact.name)} · <a href="mailto:${escapeHtml(contact.email)}" style="color:#c8301f;text-decoration:none;font-weight:700;">${escapeHtml(contact.email)}</a>`)}
+      </p>
+      <p style="margin:12px 0 0;color:#5a564c;font-size:13px;">Please wait until your order says &ldquo;Ready for pickup&rdquo; before collecting.</p>
+    `);
+  }
+
+  return box('Shipping Address', `
+      <p style="margin:0;color:#0a0a0a;line-height:1.6;font-size:14px;font-weight:600;">
+        ${escapeHtml(order.shippingAddress?.name || '')}<br/>
+        ${muted(`${escapeHtml(order.shippingAddress?.street || '')}<br/>${escapeHtml(order.shippingAddress?.city || '')}, ${escapeHtml(order.shippingAddress?.state || '')} ${escapeHtml(order.shippingAddress?.zip || '')}`)}
+      </p>`);
+}
+
 exports.sendOrderConfirmation = async function sendOrderConfirmation(order) {
   const transporter = getTransporter();
   if (!transporter) {
@@ -137,7 +189,7 @@ exports.sendOrderConfirmation = async function sendOrderConfirmation(order) {
       <h1 style="font-size:36px;font-weight:400;margin:0 0 12px;color:#0a0a0a;letter-spacing:0.01em;text-transform:uppercase;font-family:'Anton', sans-serif;line-height:0.95;">Welcome to<br/><span style="color:#c8301f;">Truekin.</span></h1>
       <div style="width:40px;height:3px;background-color:#0a0a0a;margin:20px 0;"></div>
       <p style="font-size:15px;color:#5a564c;margin:0;line-height:1.6;font-weight:500;">
-        Thanks for your order, ${escapeHtml(order.shippingAddress?.name?.split(' ')[0] || 'friend')}! We've received your design and we're getting the press ready.
+        Thanks for your order, ${escapeHtml(firstName(order))}! We've received your design and we're getting the press ready.
       </p>
     </div>
 
@@ -169,16 +221,7 @@ exports.sendOrderConfirmation = async function sendOrderConfirmation(order) {
       </tr>
     </table>
 
-    <div style="margin-bottom:32px;padding:24px;background-color:#ffffff;border:1.5px solid #d9d3c2;border-left:4px solid #0a0a0a;">
-      <h3 style="font-size:11px;font-weight:800;margin:0 0 12px;text-transform:uppercase;letter-spacing:0.15em;color:#8a8578;">Shipping Address</h3>
-      <p style="margin:0;color:#0a0a0a;line-height:1.6;font-size:14px;font-weight:600;">
-        ${escapeHtml(order.shippingAddress?.name || '')}<br/>
-        <span style="color:#5a564c;font-weight:500;">
-          ${escapeHtml(order.shippingAddress?.street || '')}<br/>
-          ${escapeHtml(order.shippingAddress?.city || '')}, ${escapeHtml(order.shippingAddress?.state || '')} ${escapeHtml(order.shippingAddress?.zip || '')}
-        </span>
-      </p>
-    </div>
+    ${fulfillmentBlock(order)}
 
     <div style="text-align:center;">
       <a href="${trackUrl(order)}" style="display:inline-block;background-color:#0a0a0a;color:#ffffff;padding:16px 36px;border-radius:4px;text-decoration:none;font-weight:700;font-size:14px;text-transform:uppercase;letter-spacing:0.1em;font-family:'Oswald', sans-serif;">

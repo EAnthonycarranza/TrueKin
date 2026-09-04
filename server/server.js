@@ -34,6 +34,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/products', require('./routes/products'));
 app.use('/api/checkout', require('./routes/checkout'));
 app.use('/api/orders', require('./routes/orders'));
+app.use('/api/pickup', require('./routes/pickup'));
 app.use('/api/shipping', require('./routes/shipping'));
 app.use('/api/quotes', require('./routes/quotes'));
 app.use('/api/reviews', require('./routes/reviews'));

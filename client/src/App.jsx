@@ -25,6 +25,8 @@ import AdminProducts from './pages/admin/Products';
 import AdminProductEdit from './pages/admin/ProductEdit';
 import AdminOrders from './pages/admin/Orders';
 import AdminOrderDetail from './pages/admin/OrderDetail';
+import AdminPickupLocations from './pages/admin/PickupLocations';
+import Pickup from './pages/Pickup';
 
 // Local-only playground for the 3D shirt studio; stripped from production builds.
 const ShirtStudioDev = import.meta.env.DEV ? lazy(() => import('./pages/dev/ShirtStudioDev')) : null;
@@ -63,8 +65,10 @@ function AppShell() {
         <Route path="/my-orders" element={<ProtectedRoute><MyOrders /></ProtectedRoute>} />
         <Route path="/quote" element={<Quote />} />
         <Route path="/track" element={<Track />} />
+        <Route path="/pickup" element={<Pickup />} />
 
         {/* Admin Routes */}
+        <Route path="/admin/pickup-locations" element={<ProtectedRoute admin><AdminPickupLocations /></ProtectedRoute>} />
         <Route path="/admin" element={<ProtectedRoute admin><AdminDashboard /></ProtectedRoute>} />
         <Route path="/admin/products" element={<ProtectedRoute admin><AdminProducts /></ProtectedRoute>} />
         <Route path="/admin/products/new" element={<ProtectedRoute admin><AdminProductEdit /></ProtectedRoute>} />

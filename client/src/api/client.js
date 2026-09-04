@@ -51,6 +51,12 @@ export const api = {
     return request(`/orders/track?${params.toString()}`);
   },
 
+  // Pickup locations
+  getPickupLocations: () => request('/pickup/locations'),
+  adminGetPickupLocations: () => request('/pickup/admin/locations'),
+  adminSavePickupLocation: (id, body) => request(`/pickup/admin/locations${id ? '/' + id : ''}`, { method: id ? 'PUT' : 'POST', body }),
+  adminUpdatePickupInstructions: (id, orderInstructions) => request(`/orders/admin/${id}/pickup`, { method: 'PUT', body: { orderInstructions } }),
+
   // Shipping
   getShippingRates: (body) => request('/shipping/rates', { method: 'POST', body }),
   validateAddress: (body) => request('/shipping/validate-address', { method: 'POST', body }),
@@ -78,11 +84,11 @@ export const api = {
   adminSaveDesign: (id, formData) =>
     request(`/products/${id}/design`, { method: 'PUT', body: formData, isFormData: true }),
 
-  adminGetOrders: (status = '') =>
-    request(`/orders/admin/all${status ? '?status=' + status : ''}`),
+  adminGetOrders: (status = '', fulfillmentMethod = '') =>
+    request(`/orders/admin/all?${new URLSearchParams({ status, fulfillmentMethod })}`),
   adminGetOrder: (id) => request(`/orders/admin/${id}`),
-  adminUpdateOrderStatus: (id, status) =>
-    request(`/orders/admin/${id}/status`, { method: 'PUT', body: { status } }),
+  adminUpdateOrderStatus: (id, status, paymentReceived = false) =>
+    request(`/orders/admin/${id}/status`, { method: 'PUT', body: { status, paymentReceived } }),
   adminGetStats: () => request('/orders/admin/stats'),
 
   adminCreateLabel: (body) => request('/shipping/label', { method: 'POST', body }),

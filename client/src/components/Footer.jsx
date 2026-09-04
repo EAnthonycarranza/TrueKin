@@ -66,7 +66,8 @@ export default function Footer() {
             <h5>Support</h5>
             <a href="mailto:hello@truekin.co">Contact</a>
             <Link to="/quote">Request a Quote</Link>
-            <a href="#">Shipping</a>
+            <Link to="/pickup">Pickup Locations</Link>
+            <Link to="/track">Track Your Order</Link>
             <a href="#">Returns</a>
           </div>
 

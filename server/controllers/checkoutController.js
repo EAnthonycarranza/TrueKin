@@ -1,14 +1,46 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const Order = require('../models/Order');
 const Product = require('../models/Product');
+const PickupLocation = require('../models/PickupLocation');
+const mongoose = require('mongoose');
+const { inputError, readText, snapshotLocation } = require('../utils/fulfillment');
 const { sendOrderConfirmation } = require('../utils/email');
 
 // Create Stripe Checkout Session
 exports.createCheckoutSession = async (req, res) => {
   try {
-    const { items, shippingAddress, guestEmail, shippingRate } = req.body;
+    const { items, shippingAddress, guestEmail, fulfillmentMethod = 'shipping', paymentMethod = 'card' } = req.body;
+    if (!['shipping', 'pickup'].includes(fulfillmentMethod)) throw inputError('Choose shipping or pickup');
+    if (!['card', 'pay_on_pickup'].includes(paymentMethod)) throw inputError('Choose a valid payment method');
+    if (paymentMethod === 'pay_on_pickup' && fulfillmentMethod !== 'pickup') throw inputError('Payment at pickup is only available for pickup orders');
+    if (!req.user && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(readText(guestEmail, 'Email', 254, true))) {
+      throw inputError('Enter a valid email address');
+    }
+    let pickup;
+    // Only accept a location ID from the customer; addresses and instructions
+    // are copied from the active, admin-managed location on the server.
+    if (fulfillmentMethod === 'pickup') {
+      const details = req.body.pickup || {};
+      if (!mongoose.isValidObjectId(details.locationId)) throw inputError('Choose a pickup location');
+      const location = await PickupLocation.findOne({ _id: details.locationId, active: true });
+      if (!location) throw inputError('This pickup location is no longer available. Please choose another.');
+      pickup = {
+        ...snapshotLocation(location),
+        locationId: location._id,
+        contactName: readText(details.contactName, 'Pickup name', 120, true),
+        customerInstructions: readText(details.customerInstructions, 'Pickup notes', 2000),
+      };
+    } else {
+      for (const field of ['name', 'street', 'city', 'state', 'zip']) {
+        readText(shippingAddress?.[field], `Shipping ${field}`, 200, true);
+      }
+    }
+    const shippingRate = fulfillmentMethod === 'shipping' ? req.body.shippingRate : undefined;
+    if (shippingRate && (!Number.isFinite(shippingRate.amount) || shippingRate.amount < 0)) {
+      throw inputError('Invalid shipping amount');
+    }
 
-    if (!items || items.length === 0) {
+    if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: 'No items provided' });
     }
 
@@ -17,6 +49,7 @@ exports.createCheckoutSession = async (req, res) => {
     const orderItems = [];
 
     for (const item of items) {
+      if (!Number.isSafeInteger(item.quantity) || item.quantity < 1) throw inputError('Item quantities must be positive whole numbers');
       const product = await Product.findById(item.productId);
       if (!product) {
         return res.status(404).json({ message: `Product not found: ${item.productId}` });
@@ -114,7 +147,10 @@ exports.createCheckoutSession = async (req, res) => {
       guestEmail: guestEmail || undefined,
       items: orderItems,
       totalAmount,
-      shippingAddress,
+      fulfillmentMethod,
+      paymentMethod,
+      pickup,
+      shippingAddress: fulfillmentMethod === 'shipping' ? shippingAddress : undefined,
       status: 'pending',
       shippingRate: shippingRate
         ? {
@@ -130,6 +166,12 @@ exports.createCheckoutSession = async (req, res) => {
       shippoRateId: shippingRate?.rateId || undefined,
     });
 
+    if (paymentMethod === 'pay_on_pickup') {
+      await order.populate('user', 'name email');
+      sendOrderConfirmation(order).catch((error) => console.error('Pickup confirmation email failed:', error.message));
+      return res.status(201).json({ order });
+    }
+
     // Create Stripe session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -141,6 +183,7 @@ exports.createCheckoutSession = async (req, res) => {
       metadata: {
         orderId: order._id.toString(),
         shippoRateId: shippingRate?.rateId || '',
+        fulfillmentMethod,
       },
       customer_email: req.user?.email || guestEmail || undefined,
     });
@@ -151,7 +194,7 @@ exports.createCheckoutSession = async (req, res) => {
     res.json({ sessionId: session.id, url: session.url });
   } catch (error) {
     console.error('Checkout error:', error);
-    res.status(500).json({ message: error.message });
+    res.status(error.status || (error.name === 'ValidationError' ? 400 : 500)).json({ message: error.message });
   }
 };
 
@@ -182,8 +225,10 @@ exports.handleWebhook = async (req, res) => {
 
     try {
       const order = await Order.findById(orderId).populate('user', 'name email');
-      if (order) {
+      if (order && order.status === 'pending' && session.payment_status === 'paid') {
         order.status = 'paid';
+        order.paymentStatus = 'paid';
+        order.paidAt = new Date();
         order.stripePaymentIntentId = session.payment_intent;
         await order.save();
         console.log(`Order ${orderId} marked as paid`);
@@ -227,11 +272,14 @@ exports.getOrderBySession = async (req, res) => {
       return res.status(404).json({ message: 'Order not found' });
     }
 
-    // Fallback: If webhook didn't hit yet (common in local dev without Stripe CLI),
-    // we mark it paid here and send the email so the user gets confirmation.
+    // Verify payment with Stripe when the webhook has not arrived yet.
     if (order.status === 'pending') {
-      console.log(`[Dev Fallback] Marking order ${order._id} as paid from success page`);
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+      if (session.payment_status !== 'paid') return res.json({ order });
       order.status = 'paid';
+      order.paymentStatus = 'paid';
+      order.paidAt = new Date();
+      order.stripePaymentIntentId = session.payment_intent;
       await order.save();
       
       // Trigger confirmation email

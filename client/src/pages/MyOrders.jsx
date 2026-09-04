@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
+import PickupDetails from '../components/PickupDetails';
 import { Package } from 'lucide-react';
+import { statusLabel, pickupPaymentDue } from '../utils/fulfillment';
 import { api } from '../api/client';
 
 const statusBadge = {
@@ -9,6 +11,8 @@ const statusBadge = {
   shipped: 'badge-info',
   delivered: 'badge-success',
   cancelled: 'badge-danger',
+  ready_for_pickup: 'badge-warning',
+  picked_up: 'badge-success',
 };
 
 export default function MyOrders() {
@@ -47,7 +51,7 @@ export default function MyOrders() {
                   <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>ID: {order._id}</p>
                 </div>
                 <span className={`badge ${statusBadge[order.status] || 'badge-gray'}`}>
-                  {order.status}
+                  {statusLabel(order.status)}
                 </span>
               </div>
 
@@ -63,6 +67,8 @@ export default function MyOrders() {
                 <span>${(order.totalAmount / 100).toFixed(2)}</span>
               </div>
 
+              {pickupPaymentDue(order) && <p className="pickup-help">Payment due at pickup</p>}
+              <PickupDetails order={order} />
               {order.shippoTrackingNumber && (
                 <p style={{ fontSize: 13, marginTop: 8 }}>
                   Tracking: <a href={order.shippoTrackingUrl} target="_blank" rel="noreferrer" style={{ color: '#2563eb' }}>

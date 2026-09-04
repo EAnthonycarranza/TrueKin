@@ -1,5 +1,6 @@
 const Order = require('../models/Order');
 const User = require('../models/User');
+const { readText, validateOrderStatus } = require('../utils/fulfillment');
 
 // Public: Lookup an order by email + orderId for anonymous tracking.
 // Either:
@@ -47,6 +48,11 @@ exports.trackOrders = async (req, res) => {
           items: order.items,
           shippingAddress: order.shippingAddress,
           shippingRate: order.shippingRate,
+          fulfillmentMethod: order.fulfillmentMethod,
+          paymentMethod: order.paymentMethod,
+          paymentStatus: order.paymentStatus,
+          paidAt: order.paidAt,
+          pickup: order.pickup,
           shippoTrackingNumber: order.shippoTrackingNumber,
           shippoTrackingUrl: order.shippoTrackingUrl,
           shippoLabelUrl: order.shippoLabelUrl,
@@ -62,7 +68,7 @@ exports.trackOrders = async (req, res) => {
     const orders = await Order.find(baseMatch)
       .sort({ createdAt: -1 })
       .limit(20)
-      .select('_id status createdAt totalAmount items shippoTrackingNumber shippoTrackingUrl trackingStatus shippingRate');
+      .select('_id status createdAt totalAmount items shippoTrackingNumber shippoTrackingUrl trackingStatus shippingRate fulfillmentMethod pickup paymentMethod paymentStatus');
 
     res.json({ orders });
   } catch (error) {
@@ -87,9 +93,11 @@ exports.getMyOrders = async (req, res) => {
 // Admin: Get all orders
 exports.getAllOrders = async (req, res) => {
   try {
-    const { status } = req.query;
+    const { status, fulfillmentMethod } = req.query;
     const filter = {};
     if (status) filter.status = status;
+    if (fulfillmentMethod === 'pickup') filter.fulfillmentMethod = 'pickup';
+    if (fulfillmentMethod === 'shipping') filter.fulfillmentMethod = { $ne: 'pickup' };
 
     const orders = await Order.find(filter)
       .sort({ createdAt: -1 })
@@ -123,32 +131,60 @@ exports.getOrder = async (req, res) => {
 exports.updateOrderStatus = async (req, res) => {
   try {
     const { status } = req.body;
-    const order = await Order.findByIdAndUpdate(
-      req.params.id,
-      { status },
-      { new: true }
-    ).populate('user', 'name email');
+    const order = await Order.findById(req.params.id).populate('user', 'name email');
 
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
     }
 
+    validateOrderStatus(order, status, req.body.paymentReceived);
+    order.status = status;
+    if (status === 'ready_for_pickup' && !order.pickup.readyAt) order.pickup.readyAt = new Date();
+    if (status === 'picked_up' && !order.pickup.pickedUpAt) order.pickup.pickedUpAt = new Date();
+    if (status === 'picked_up' && order.paymentMethod === 'pay_on_pickup' && order.paymentStatus !== 'paid') {
+      order.paymentStatus = 'paid';
+      order.paidAt = new Date();
+    }
+    await order.save();
     res.json({ order });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(error.status || 500).json({ message: error.message });
+  }
+};
+
+// Customer-visible instructions specific to this order, separate from their notes.
+exports.updatePickupInstructions = async (req, res) => {
+  try {
+    const orderInstructions = readText(req.body.orderInstructions, 'Pickup instructions', 2000);
+    const order = await Order.findOneAndUpdate(
+      { _id: req.params.id, fulfillmentMethod: 'pickup' },
+      { $set: { 'pickup.orderInstructions': orderInstructions } },
+      { new: true, runValidators: true }
+    ).populate('user', 'name email');
+    if (!order) return res.status(404).json({ message: 'Pickup order not found' });
+    res.json({ order });
+  } catch (error) {
+    res.status(error.status || 500).json({ message: error.message });
   }
 };
 
 // Admin: Dashboard stats
 exports.getDashboardStats = async (req, res) => {
   try {
+    // Legacy card orders have no paymentMethod. Uncollected pickup balances
+    // must never count as received revenue, even while processing or ready.
+    const paidFilter = {
+      status: { $in: ['paid', 'processing', 'shipped', 'delivered', 'ready_for_pickup', 'picked_up'] },
+      $or: [{ paymentMethod: { $ne: 'pay_on_pickup' } }, { paymentStatus: 'paid' }],
+    };
     const totalOrders = await Order.countDocuments();
-    const paidOrders = await Order.countDocuments({ status: { $in: ['paid', 'processing', 'shipped', 'delivered'] } });
+    const paidOrders = await Order.countDocuments(paidFilter);
     const pendingOrders = await Order.countDocuments({ status: 'pending' });
+    const readyForPickupOrders = await Order.countDocuments({ status: 'ready_for_pickup' });
     const shippedOrders = await Order.countDocuments({ status: 'shipped' });
 
     const revenueResult = await Order.aggregate([
-      { $match: { status: { $in: ['paid', 'processing', 'shipped', 'delivered'] } } },
+      { $match: paidFilter },
       { $group: { _id: null, total: { $sum: '$totalAmount' } } },
     ]);
 
@@ -165,6 +201,7 @@ exports.getDashboardStats = async (req, res) => {
         paidOrders,
         pendingOrders,
         shippedOrders,
+        readyForPickupOrders,
         totalRevenue,
       },
       recentOrders,

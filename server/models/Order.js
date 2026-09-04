@@ -1,4 +1,17 @@
 const mongoose = require('mongoose');
+const { locationFields, limits } = require('../utils/fulfillment');
+
+function requiresShipping() { return this.fulfillmentMethod !== 'pickup'; }
+
+const pickupSchema = new mongoose.Schema({
+  locationId: { type: mongoose.Schema.Types.ObjectId, ref: 'PickupLocation', required: true },
+  ...Object.fromEntries(locationFields.map((field) => [field, { type: String, maxlength: limits[field] }])),
+  contactName: { type: String, required: true, trim: true, maxlength: 120 },
+  customerInstructions: { type: String, trim: true, maxlength: 2000, default: '' },
+  orderInstructions: { type: String, trim: true, maxlength: 2000, default: '' },
+  readyAt: Date,
+  pickedUpAt: Date,
+}, { _id: false });
 
 const orderItemSchema = new mongoose.Schema({
   product: {
@@ -32,17 +45,22 @@ const orderSchema = new mongoose.Schema({
     type: Number,
     required: true,
   },
+  fulfillmentMethod: { type: String, enum: ['shipping', 'pickup'], default: 'shipping' },
+  paymentMethod: { type: String, enum: ['card', 'pay_on_pickup'], default: 'card' },
+  paymentStatus: { type: String, enum: ['pending', 'paid'], default: 'pending' },
+  paidAt: Date,
+  pickup: { type: pickupSchema, required: function () { return this.fulfillmentMethod === 'pickup'; } },
   shippingAddress: {
-    name: { type: String, required: true },
-    street: { type: String, required: true },
-    city: { type: String, required: true },
-    state: { type: String, required: true },
-    zip: { type: String, required: true },
+    name: { type: String, required: requiresShipping },
+    street: { type: String, required: requiresShipping },
+    city: { type: String, required: requiresShipping },
+    state: { type: String, required: requiresShipping },
+    zip: { type: String, required: requiresShipping },
     country: { type: String, default: 'US' },
   },
   status: {
     type: String,
-    enum: ['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled'],
+    enum: ['pending', 'paid', 'processing', 'shipped', 'delivered', 'ready_for_pickup', 'picked_up', 'cancelled'],
     default: 'pending',
   },
   stripeSessionId: String,

@@ -166,6 +166,9 @@ exports.getOrderRates = async (req, res) => {
 
     const order = await Order.findById(req.params.orderId);
     if (!order) return res.status(404).json({ message: 'Order not found' });
+    if (order.fulfillmentMethod === 'pickup') {
+      return res.status(400).json({ message: 'Pickup orders do not use shipping labels, rates, or tracking' });
+    }
 
     const shipmentRes = await fetch(`${SHIPPO_API}/shipments/`, {
       method: 'POST',
@@ -216,6 +219,9 @@ exports.createLabel = async (req, res) => {
 
     const order = await Order.findById(orderId);
     if (!order) return res.status(404).json({ message: 'Order not found' });
+    if (order.fulfillmentMethod === 'pickup') {
+      return res.status(400).json({ message: 'Pickup orders do not use shipping labels, rates, or tracking' });
+    }
 
     if (order.shippoTransactionId) {
       return res.status(400).json({
@@ -358,6 +364,9 @@ exports.refundLabel = async (req, res) => {
 
     const order = await Order.findById(req.params.orderId);
     if (!order) return res.status(404).json({ message: 'Order not found' });
+    if (order.fulfillmentMethod === 'pickup') {
+      return res.status(400).json({ message: 'Pickup orders do not use shipping labels, rates, or tracking' });
+    }
     if (!order.shippoTransactionId) {
       return res.status(400).json({ message: 'Order has no label to refund' });
     }
@@ -411,6 +420,9 @@ exports.getTracking = async (req, res) => {
 
     const order = await Order.findById(req.params.orderId);
     if (!order) return res.status(404).json({ message: 'Order not found' });
+    if (order.fulfillmentMethod === 'pickup') {
+      return res.status(400).json({ message: 'Pickup orders do not use shipping labels, rates, or tracking' });
+    }
     if (!order.shippoTrackingNumber) {
       return res.status(400).json({ message: 'Order has no tracking number yet' });
     }

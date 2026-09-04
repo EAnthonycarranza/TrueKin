@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { CheckCircle, Package } from 'lucide-react';
+import PickupDetails from '../components/PickupDetails';
+import { pickupPaymentDue, pickupContact } from '../utils/fulfillment';
 import { api } from '../api/client';
 import { useCartStore } from '../store/cartStore';
 
@@ -12,17 +14,15 @@ export default function OrderSuccess() {
 
   useEffect(() => {
     const sessionId = searchParams.get('session_id');
-    if (sessionId) {
-      api.getOrderBySession(sessionId)
-        .then((d) => {
-          setOrder(d.order);
-          clearCart();
-        })
-        .catch(() => {})
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
+    const orderId = searchParams.get('order');
+    const email = searchParams.get('email');
+    const request = sessionId ? api.getOrderBySession(sessionId) : orderId && email ? api.trackOrders({ orderId, email }) : null;
+    if (request) {
+      request.then((d) => {
+        setOrder(d.order);
+        if (d.order.paymentMethod === 'pay_on_pickup' || d.order.status !== 'pending') clearCart();
+      }).catch(() => {}).finally(() => setLoading(false));
+    } else { setLoading(false); }
   }, [searchParams, clearCart]);
 
   if (loading) return <div className="loading-page"><div className="spinner" /></div>;
@@ -31,9 +31,9 @@ export default function OrderSuccess() {
     <div className="page">
       <div className="container" style={{ maxWidth: 600, textAlign: 'center' }}>
         <CheckCircle size={64} color="var(--success)" style={{ marginBottom: 20 }} />
-        <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 8 }}>Order Confirmed!</h1>
+        <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 8 }}>{!order ? 'Check your order' : order.status === 'pending' && order.paymentMethod !== 'pay_on_pickup' ? 'Confirming payment…' : 'Order Confirmed!'}</h1>
         <p style={{ color: 'var(--text-secondary)', marginBottom: 32, fontSize: 16 }}>
-          Thank you for your purchase. You'll receive a confirmation email shortly.
+          {pickupPaymentDue(order || {}) ? `Your pickup order is placed. Pay when you collect it and coordinate with ${pickupContact(order?.pickup).name} at ${pickupContact(order?.pickup).email}.` : order ? 'Thank you for your order. View your latest status and details below.' : 'We couldn’t load your confirmation. Use Track Your Order to look it up.'}
         </p>
 
         {order && (
@@ -82,9 +82,10 @@ export default function OrderSuccess() {
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+        {order?.fulfillmentMethod === 'pickup' && <div className="card" style={{ marginBottom: 24 }}><PickupDetails order={order} /></div>}
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
           <Link to="/shop" className="btn btn-primary">Continue Shopping</Link>
-          <Link to="/my-orders" className="btn btn-secondary">View My Orders</Link>
+          <Link to={order ? `/track?${new URLSearchParams({ order: order._id, email: searchParams.get('email') || order.guestEmail || order.user?.email || '' })}` : '/track'} className="btn btn-secondary">Track Your Order</Link>
         </div>
       </div>
     </div>

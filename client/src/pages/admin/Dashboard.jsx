@@ -4,6 +4,7 @@ import {
   DollarSign, ShoppingCart, Package, Truck, Shirt, ClipboardList,
   ArrowRight, ArrowUpRight, TrendingUp, PlusCircle,
 } from 'lucide-react';
+import { statusLabel, pickupPaymentDue } from '../../utils/fulfillment';
 import { api } from '../../api/client';
 import AdminLayout from '../../components/AdminLayout';
 
@@ -14,6 +15,8 @@ const statusBadge = {
   shipped: 'badge-info',
   delivered: 'badge-success',
   cancelled: 'badge-danger',
+  ready_for_pickup: 'badge-warning',
+  picked_up: 'badge-success',
 };
 
 export default function AdminDashboard() {
@@ -277,7 +280,7 @@ export default function AdminDashboard() {
                     </td>
                     <td data-label="Status">
                       <span className={`badge ${statusBadge[order.status] || 'badge-gray'}`}>
-                        {order.status}
+                        {statusLabel(order.status)}
                       </span>
                     </td>
                     <td data-label="Date" style={{ textAlign: 'right', color: 'var(--text-muted)', fontSize: 13 }}>

@@ -2,9 +2,12 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Search, Package, Truck, CheckCircle2, Clock, MapPin } from 'lucide-react';
 import toast from 'react-hot-toast';
+import PickupDetails from '../components/PickupDetails';
 import { api } from '../api/client';
 
 const statusBadge = {
+  ready_for_pickup: { label: 'Ready for pickup', color: '#926b12' },
+  picked_up: { label: 'Picked up', color: '#16a34a' },
   pending: { label: 'Pending', color: '#f59e0b' },
   paid: { label: 'Paid', color: '#16a34a' },
   processing: { label: 'Processing', color: '#2563eb' },
@@ -186,13 +189,13 @@ function StatusBadge({ status, trackingStatus }) {
 }
 
 function OrderDetail({ order }) {
+  const isPickup = order.fulfillmentMethod === 'pickup';
   const steps = [
     { key: 'paid', label: 'Ordered', icon: CheckCircle2 },
     { key: 'processing', label: 'Processing', icon: Package },
-    { key: 'shipped', label: 'Shipped', icon: Truck },
-    { key: 'delivered', label: 'Delivered', icon: MapPin },
+    ...(isPickup ? [{ key: 'ready_for_pickup', label: 'Ready for pickup', icon: MapPin }, { key: 'picked_up', label: 'Picked up', icon: CheckCircle2 }] : [{ key: 'shipped', label: 'Shipped', icon: Truck }, { key: 'delivered', label: 'Delivered', icon: MapPin }]),
   ];
-  const order404 = { pending: 0, paid: 1, processing: 2, shipped: 3, delivered: 4, cancelled: -1 };
+  const order404 = { pending: order.paymentMethod === 'pay_on_pickup' ? 0 : -1, paid: 0, processing: 1, shipped: 2, delivered: 3, ready_for_pickup: 2, picked_up: 3, cancelled: -1 };
   const activeIdx = order404[order.status] ?? 0;
 
   return (
@@ -321,10 +324,11 @@ function OrderDetail({ order }) {
         <span>${(order.totalAmount / 100).toFixed(2)}</span>
       </div>
 
-      <div style={{ marginTop: 16, fontSize: 13, color: 'var(--text-secondary)' }}>
+      <PickupDetails order={order} />
+      {!isPickup && <div style={{ marginTop: 16, fontSize: 13, color: 'var(--text-secondary)' }}>
         Ship to: {order.shippingAddress?.name}, {order.shippingAddress?.street},{' '}
         {order.shippingAddress?.city}, {order.shippingAddress?.state} {order.shippingAddress?.zip}
-      </div>
+      </div>}
     </div>
   );
 }
