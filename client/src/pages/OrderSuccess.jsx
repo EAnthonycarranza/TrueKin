@@ -51,7 +51,7 @@ export default function OrderSuccess() {
                   <p style={{ fontSize: 14, fontWeight: 500 }}>{item.title}</p>
                   <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                     Qty: {item.quantity}
-                    {item.shirtStyle && <> · {item.shirtStyle === 'womens' ? "Women's" : "Men's"}</>}
+                    {item.shirtStyle && <> · Unisex</>}
                     {item.size && <> · Size: {item.size}</>}
                     {item.color && (
                       <>

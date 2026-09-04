@@ -13,7 +13,7 @@ const COLOR_NAMES = {
   '#1fd3ca': 'Teal', '#FFC0CB': 'Pink', '#8B4513': 'Brown',
 };
 
-const TshirtPreview = lazy(() => import('../components/designer/TshirtPreview'));
+const Shirt3DPreview = lazy(() => import('../components/shirt3d/Shirt3DPreview'));
 const Tshirt2DPreview = lazy(() => import('../components/designer/Tshirt2DPreview'));
 
 export default function ProductDetail() {
@@ -25,7 +25,6 @@ export default function ProductDetail() {
   const [quantity, setQuantity] = useState(1);
   const [selectedColor, setSelectedColor] = useState(null);
   const [selectedSize, setSelectedSize] = useState(null);
-  const [selectedShirtStyle, setSelectedShirtStyle] = useState(null);
   const addItem = useCartStore((s) => s.addItem);
   const openCart = useCartStore((s) => s.openCart);
   const authUser = useAuthStore((s) => s.user);
@@ -126,7 +125,6 @@ export default function ProductDetail() {
   const hasDesign = !!product.designData;
   const hasImages = product.imageUrls.length > 0;
   const is2D = product.editorType === '2d';
-  const savedShirtStyle = product.shirtStyle || 'mens';
 
   const hasColors = product?.availableColors?.length > 0;
   const hasSizes = product?.sizes?.length > 0;
@@ -159,15 +157,15 @@ export default function ProductDetail() {
   const previewLabel = is2D ? '2D View' : '3D View';
 
   return (
-    <div className="page">
-      <div className="container">
-        <div style={styles.layout}>
+    <div className="page product-detail-page">
+      <div className="container product-detail-container">
+        <div className="product-detail-layout" style={styles.layout}>
           {/* Images / Design Preview */}
-          <div style={styles.images}>
+          <div className="product-detail-media" style={styles.images}>
             {/* Main view: 3D/2D design preview or static image */}
             {showDesignPreview && hasDesign ? (
               <Suspense fallback={
-                <div style={{ ...styles.mainImage, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div className="product-detail-main-image" style={{ ...styles.mainImage, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <div className="spinner" />
                 </div>
               }>
@@ -178,16 +176,15 @@ export default function ProductDetail() {
                     style={{ minHeight: 400 }}
                   />
                 ) : (
-                  <TshirtPreview
+                  <Shirt3DPreview
                     designData={product.designData}
                     colorOverride={selectedColor}
-                    shirtStyleOverride={selectedShirtStyle || savedShirtStyle}
-                    style={{ aspectRatio: '1', minHeight: 400 }}
+                    style={{ minHeight: 400 }}
                   />
                 )}
               </Suspense>
             ) : (
-              <div style={styles.mainImage}>
+              <div className="product-detail-main-image" style={styles.mainImage}>
                 {product.imageUrls[selectedImage] ? (
                   <img
                     src={product.imageUrls[selectedImage]}
@@ -204,7 +201,7 @@ export default function ProductDetail() {
 
             {/* Thumbnail strip: design preview toggle + image thumbs */}
             {(hasDesign || hasImages) && (
-              <div style={styles.thumbs}>
+              <div className="product-detail-thumbs" style={styles.thumbs}>
                 {hasDesign && (
                   <button
                     onClick={() => setShowDesignPreview(true)}
@@ -238,7 +235,7 @@ export default function ProductDetail() {
           </div>
 
           {/* Info */}
-          <div style={styles.info}>
+          <div className="product-detail-info" style={styles.info}>
             <h1 style={styles.title}>{product.title}</h1>
             <p style={styles.price}>${(product.price / 100).toFixed(2)}</p>
             <p style={styles.desc}>{product.description}</p>
@@ -868,6 +865,58 @@ export default function ProductDetail() {
           font-size: 14.5px;
           line-height: 1.6;
           white-space: pre-wrap;
+        }
+
+        @media (max-width: 800px) {
+          .product-detail-layout {
+            grid-template-columns: minmax(0, 1fr) !important;
+            gap: 28px !important;
+          }
+          .product-detail-layout > * { min-width: 0; }
+          .product-detail-media { width: 100%; min-width: 0; }
+          .product-detail-media .tk-shirt-viewer {
+            height: auto !important;
+            min-height: 0 !important;
+            aspect-ratio: 1;
+          }
+          .product-detail-thumbs {
+            max-width: 100%;
+            padding-bottom: 4px;
+            overflow-x: auto;
+            scroll-snap-type: x proximity;
+            scrollbar-width: none;
+          }
+          .product-detail-thumbs::-webkit-scrollbar { display: none; }
+          .product-detail-thumbs > * { flex: 0 0 68px !important; scroll-snap-align: start; }
+          .product-detail-info { width: 100%; min-width: 0; }
+        }
+
+        @media (max-width: 640px) {
+          .product-detail-page { padding-top: 18px; }
+          .product-detail-main-image { border-radius: 8px !important; }
+          .product-detail-info > h1 {
+            font-family: var(--font-display);
+            font-size: 38px !important;
+            font-weight: 400 !important;
+            line-height: 0.98;
+            text-transform: uppercase;
+          }
+          .product-detail-info > p:nth-of-type(1) { font-size: 22px !important; }
+          .product-detail-info > p:nth-of-type(2) { font-size: 14.5px !important; }
+          .product-detail-info button { min-height: 44px; }
+          .product-detail-info button[title] { min-width: 44px !important; height: 44px !important; }
+          .product-detail-info > .btn:last-child {
+            min-height: 54px;
+            margin-top: 18px !important;
+            font-size: 14px;
+          }
+          .tk-reviews { margin-top: 46px; padding-top: 30px; }
+          .tk-reviews-head { align-items: stretch; margin-bottom: 22px; }
+          .tk-reviews-summary { justify-content: flex-start; }
+          .tk-reviews-form,
+          .tk-reviews-signin { padding: 18px 16px; }
+          .tk-reviews-empty { align-items: flex-start; padding: 16px; }
+          .tk-review { padding: 16px; }
         }
       `}</style>
     </div>

@@ -1,15 +1,14 @@
 const multer = require('multer');
-const path = require('path');
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, '../uploads'));
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  },
-});
+/**
+ * Files are buffered in memory rather than written to disk: the storage layer
+ * (utils/storage.js) may put them in Cloudflare R2, where a temp file on the
+ * dyno would be pointless. sharp reads the buffer directly.
+ *
+ * Kept at 10MB/file so a handful of buffered uploads stays well inside the
+ * dyno's memory budget.
+ */
+const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
   const allowed = ['image/jpeg', 'image/png', 'image/webp'];

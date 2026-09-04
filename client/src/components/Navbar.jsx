@@ -1,5 +1,5 @@
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { ShoppingBag, User, LogOut, LayoutDashboard, Menu, X, Search } from 'lucide-react';
+import { ShoppingBag, User, LogOut, LayoutDashboard, Menu, X, Search, Store } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { useCartStore } from '../store/cartStore';
@@ -59,19 +59,20 @@ export default function Navbar() {
         </div>
       )}
 
-      <nav style={{
+      <nav className={`tk-navbar ${isAdminRoute ? 'tk-navbar--admin' : ''}`} style={{
         ...styles.nav,
         background: scrolled ? 'rgba(244,241,234,0.82)' : 'rgba(244,241,234,0.96)',
         borderBottomColor: scrolled ? 'rgba(10,10,10,0.14)' : 'rgba(10,10,10,0.08)',
         backdropFilter: 'saturate(180%) blur(18px)',
         WebkitBackdropFilter: 'saturate(180%) blur(18px)',
       }}>
-        <div className="container" style={styles.inner}>
-          <Link to="/" style={styles.logo} aria-label="Truekin home">
+        <div className="container tk-navbar-inner" style={styles.inner}>
+          <Link to={isAdminRoute ? '/admin' : '/'} className="tk-navbar-logo" style={styles.logo} aria-label={isAdminRoute ? 'Admin dashboard' : 'Truekin home'}>
             <ShieldMark size={36} />
             <span style={styles.logoText}>
               <Wordmark height={19} />
             </span>
+            {isAdminRoute && <span className="tk-navbar-admin-label">Admin</span>}
           </Link>
 
           <div style={styles.linksDesktop} className="nav-links-desktop">
@@ -104,20 +105,28 @@ export default function Navbar() {
             )}
           </div>
 
-          <div style={styles.actions}>
-            <Link to="/shop" style={styles.iconBtn} aria-label="Search" title="Search">
-              <Search size={19} />
-            </Link>
+          <div className="tk-navbar-actions" style={styles.actions}>
+            {isAdminRoute ? (
+              <Link to="/" style={styles.iconBtn} aria-label="View storefront" title="View storefront">
+                <Store size={19} />
+              </Link>
+            ) : (
+              <>
+                <Link to="/shop" style={styles.iconBtn} aria-label="Search" title="Search">
+                  <Search size={19} />
+                </Link>
 
-            <button onClick={openCart} style={styles.iconBtn} aria-label="Cart">
-              <ShoppingBag size={19} />
-              {totalItems > 0 && (
-                <span style={styles.cartBadge} className="cart-pulse">{totalItems}</span>
-              )}
-            </button>
+                <button onClick={openCart} style={styles.iconBtn} aria-label="Cart">
+                  <ShoppingBag size={19} />
+                  {totalItems > 0 && (
+                    <span style={styles.cartBadge} className="cart-pulse">{totalItems}</span>
+                  )}
+                </button>
+              </>
+            )}
 
             {user ? (
-              <div style={styles.userMenu}>
+              <div className="tk-navbar-auth" style={styles.userMenu}>
                 <div style={styles.avatar} title={user.name}>
                   {user.name?.[0]?.toUpperCase() || 'U'}
                 </div>
@@ -126,7 +135,7 @@ export default function Navbar() {
                 </button>
               </div>
             ) : (
-              <Link to="/login" className="btn btn-primary btn-sm" style={{ padding: '9px 18px' }}>
+              <Link to="/login" className="btn btn-primary btn-sm tk-navbar-auth" style={{ padding: '9px 18px' }}>
                 Sign In
               </Link>
             )}
@@ -147,7 +156,21 @@ export default function Navbar() {
       {mobileOpen && (
         <>
           <div style={styles.mobileOverlay} onClick={() => setMobileOpen(false)} />
-          <div style={styles.mobileDrawer} className="scale-in">
+          <aside style={styles.mobileDrawer} className="tk-mobile-drawer">
+            <div className="tk-mobile-drawer-head">
+              <Link to="/" className="tk-mobile-drawer-brand" aria-label="Truekin home">
+                <ShieldMark size={34} />
+                <Wordmark height={18} />
+              </Link>
+              <button
+                type="button"
+                className="tk-mobile-drawer-close"
+                onClick={() => setMobileOpen(false)}
+                aria-label="Close menu"
+              >
+                <X size={22} />
+              </button>
+            </div>
             <nav style={styles.mobileNav}>
               <Link to="/shop" style={styles.mobileLink}>Shop</Link>
               <Link to="/shop?sort=newest" style={styles.mobileLink}>New Drop</Link>
@@ -172,7 +195,7 @@ export default function Navbar() {
                 </>
               )}
             </nav>
-          </div>
+          </aside>
         </>
       )}
 
@@ -189,6 +212,78 @@ export default function Navbar() {
         @media (max-width: 860px) {
           .nav-links-desktop { display: none !important; }
           .nav-menu-btn { display: inline-flex !important; }
+        }
+        .tk-mobile-drawer-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+          padding: 16px 18px;
+          border-bottom: 1px solid var(--border);
+        }
+        .tk-mobile-drawer-brand {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+        }
+        .tk-navbar-admin-label {
+          display: inline-flex;
+          align-items: center;
+          min-height: 24px;
+          padding: 3px 8px;
+          border: 1px solid var(--border-strong);
+          border-radius: 3px;
+          color: var(--text-secondary);
+          font-family: var(--font-secondary);
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.16em;
+          line-height: 1;
+          text-transform: uppercase;
+        }
+        .tk-mobile-drawer-close {
+          display: inline-flex;
+          width: 44px;
+          height: 44px;
+          align-items: center;
+          justify-content: center;
+          border-radius: 6px;
+          background: var(--accent-light);
+        }
+        @media (max-width: 680px) {
+          .tk-navbar { height: 64px !important; }
+          .tk-navbar-inner { gap: 10px !important; padding-inline: 16px !important; }
+          .tk-navbar-logo { gap: 8px !important; min-width: 0; }
+          .tk-navbar-logo > svg:first-child { width: 31px; height: 31px; }
+          .tk-navbar-logo span svg { width: 73px; height: auto; }
+          .tk-navbar--admin .tk-navbar-logo span svg { width: 68px; }
+          .tk-navbar--admin .tk-navbar-admin-label { display: none; }
+          .tk-navbar-actions { gap: 2px !important; }
+          .tk-navbar-actions > a:not(.tk-navbar-auth),
+          .tk-navbar-actions > button {
+            width: 42px;
+            height: 42px;
+            padding: 0 !important;
+            align-items: center;
+            justify-content: center;
+          }
+          .tk-navbar-auth { display: none !important; }
+          .tk-mobile-drawer {
+            top: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            left: auto !important;
+            width: min(88vw, 380px) !important;
+            padding: 0 0 max(18px, env(safe-area-inset-bottom)) !important;
+            border-radius: 0 !important;
+            overflow-y: auto;
+            animation: slideInMenu 0.26s var(--ease);
+          }
+          .tk-mobile-drawer nav { padding: 10px; }
+          @keyframes slideInMenu {
+            from { transform: translateX(100%); }
+            to { transform: translateX(0); }
+          }
         }
       `}</style>
     </>

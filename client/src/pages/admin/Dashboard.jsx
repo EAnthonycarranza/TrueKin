@@ -75,7 +75,7 @@ export default function AdminDashboard() {
       title="Command Post"
       description="The Truekin at-a-glance — every order, every drop, watched over."
       action={
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div className="admin-dashboard-actions" style={{ display: 'flex', gap: 10 }}>
           <Link to="/admin/orders" className="btn btn-secondary btn-sm">
             View orders <ArrowRight size={14} />
           </Link>
@@ -87,6 +87,7 @@ export default function AdminDashboard() {
     >
       {/* Stats */}
       <div
+        className="admin-stats-grid"
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
@@ -97,7 +98,7 @@ export default function AdminDashboard() {
         {statCards.map((s, i) => (
           <div
             key={i}
-            className="card card-hover"
+            className="card card-hover admin-stat-card"
             style={{
               padding: 22,
               position: 'relative',
@@ -152,12 +153,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Quick actions */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-        gap: 16,
-        marginBottom: 28,
-      }}>
+      <div className="admin-quick-grid">
         {[
           { to: '/admin/products', icon: Shirt, label: 'Manage Drops', sub: 'Edit designs and inventory' },
           { to: '/admin/products/new', icon: PlusCircle, label: 'Design a New Tee', sub: 'Launch the 2D or 3D editor' },
@@ -166,7 +162,7 @@ export default function AdminDashboard() {
           <Link
             key={a.to}
             to={a.to}
-            className="card card-hover"
+            className="card card-hover admin-quick-action"
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -175,7 +171,7 @@ export default function AdminDashboard() {
               padding: 18,
             }}
           >
-            <div style={{
+            <div className="admin-quick-icon" style={{
               width: 44,
               height: 44,
               borderRadius: 11,
@@ -198,8 +194,8 @@ export default function AdminDashboard() {
       </div>
 
       {/* Recent orders */}
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{
+      <div className="card admin-recent-orders" style={{ padding: 0, overflow: 'hidden' }}>
+        <div className="admin-recent-orders-head" style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -243,7 +239,7 @@ export default function AdminDashboard() {
             <p style={{ fontSize: 13, marginTop: 4 }}>Your first order will appear here.</p>
           </div>
         ) : (
-          <div className="table-wrap">
+          <div className="table-wrap admin-mobile-table admin-dashboard-orders-table">
             <table>
               <thead>
                 <tr>
@@ -257,7 +253,7 @@ export default function AdminDashboard() {
               <tbody>
                 {recentOrders.map((order) => (
                   <tr key={order._id}>
-                    <td>
+                    <td data-label="Order">
                       <Link
                         to={`/admin/orders/${order._id}`}
                         style={{ fontWeight: 600, color: 'var(--text)' }}
@@ -266,23 +262,25 @@ export default function AdminDashboard() {
                         #{order._id.slice(-8)}
                       </Link>
                     </td>
-                    <td>
-                      <div style={{ fontWeight: 500 }}>
+                    <td data-label="Customer">
+                      <div className="admin-customer-name" style={{ fontWeight: 500 }}>
                         {order.user?.name || order.guestEmail || 'Guest'}
                       </div>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                        {order.user?.email || ''}
-                      </div>
+                      {order.user?.email && (
+                        <div className="admin-customer-email" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                          {order.user.email}
+                        </div>
+                      )}
                     </td>
-                    <td style={{ fontWeight: 700 }}>
+                    <td data-label="Total" style={{ fontWeight: 700 }}>
                       ${(order.totalAmount / 100).toFixed(2)}
                     </td>
-                    <td>
+                    <td data-label="Status">
                       <span className={`badge ${statusBadge[order.status] || 'badge-gray'}`}>
                         {order.status}
                       </span>
                     </td>
-                    <td style={{ textAlign: 'right', color: 'var(--text-muted)', fontSize: 13 }}>
+                    <td data-label="Date" style={{ textAlign: 'right', color: 'var(--text-muted)', fontSize: 13 }}>
                       {new Date(order.createdAt).toLocaleDateString()}
                     </td>
                   </tr>

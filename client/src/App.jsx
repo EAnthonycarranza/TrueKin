@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from './store/authStore';
@@ -26,10 +26,26 @@ import AdminProductEdit from './pages/admin/ProductEdit';
 import AdminOrders from './pages/admin/Orders';
 import AdminOrderDetail from './pages/admin/OrderDetail';
 
+// Local-only playground for the 3D shirt studio; stripped from production builds.
+const ShirtStudioDev = import.meta.env.DEV ? lazy(() => import('./pages/dev/ShirtStudioDev')) : null;
+
 function AppShell() {
   const location = useLocation();
   // Admin gets its own chrome, no storefront footer.
   const hideFooter = location.pathname.startsWith('/admin');
+
+  // React Router keeps the previous scroll position by default. On phones
+  // that can land a shopper halfway down the next screen (often in the
+  // footer), so reset each route while preserving intentional hash links.
+  useEffect(() => {
+    if (location.hash) {
+      window.requestAnimationFrame(() => {
+        document.getElementById(location.hash.slice(1))?.scrollIntoView();
+      });
+      return;
+    }
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [location.pathname, location.search, location.hash]);
 
   return (
     <>
@@ -55,6 +71,10 @@ function AppShell() {
         <Route path="/admin/products/:id" element={<ProtectedRoute admin><AdminProductEdit /></ProtectedRoute>} />
         <Route path="/admin/orders" element={<ProtectedRoute admin><AdminOrders /></ProtectedRoute>} />
         <Route path="/admin/orders/:id" element={<ProtectedRoute admin><AdminOrderDetail /></ProtectedRoute>} />
+
+        {ShirtStudioDev && (
+          <Route path="/dev/shirt-studio" element={<Suspense fallback={null}><ShirtStudioDev /></Suspense>} />
+        )}
       </Routes>
       {!hideFooter && <Footer />}
     </>

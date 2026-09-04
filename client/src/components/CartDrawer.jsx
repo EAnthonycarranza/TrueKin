@@ -97,7 +97,7 @@ export default function CartDrawer() {
                   </div>
                   {(item.color || item.size || item.shirtStyle) && (
                     <p className="cart-item-meta">
-                      {item.shirtStyle && <>{item.shirtStyle === 'womens' ? "Women's" : "Men's"}</>}
+                      {item.shirtStyle && <>Unisex</>}
                       {item.shirtStyle && (item.color || item.size) && ' · '}
                       {item.color && (
                         <>
@@ -405,6 +405,41 @@ export default function CartDrawer() {
           font-size: 17px;
           font-weight: 700;
           letter-spacing: -0.01em;
+        }
+        @media (max-width: 520px) {
+          .cart-drawer { width: 100vw; }
+          .cart-header { padding: 16px 16px 13px; }
+          .cart-close {
+            width: 44px;
+            height: 44px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin: -6px -6px 0 0;
+          }
+          .cart-ship-banner { padding: 12px 16px; }
+          .cart-body { padding: 6px 16px; }
+          .cart-item { gap: 12px; padding: 14px 0; }
+          .cart-item-img { width: 82px; height: 92px; }
+          .cart-item-remove {
+            width: 40px;
+            height: 40px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin: -8px -8px 0 0;
+          }
+          .cart-qty-btn {
+            width: 40px;
+            height: 40px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+          }
+          .cart-footer {
+            padding: 16px 16px max(16px, env(safe-area-inset-bottom));
+          }
         }
       `}</style>
     </>

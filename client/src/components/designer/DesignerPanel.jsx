@@ -4,26 +4,33 @@
  * Architecture:
  *   Left:  3D preview (Three.js, tshirt.glb) showing real-time design
  *   Right: 2D Fabric.js canvas for designing front/back with SVG clip path
- *          + full tabbed tool panel (Text presets, Shapes, Clip Art, Image, Effects)
+ *          + full tabbed tool panel (Text, Assets with editable shapes, Image, Effects)
  *          + rich contextual property panels (text formatting, curved text, shape/image props)
  *
  * The Fabric.js canvas exports PNG data URLs that are applied as Decal textures
  * to the 3D model in real-time.
  */
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import * as fabric from 'fabric';
 import {
   Camera, Save, ImagePlus, Type, Palette, Trash2, XCircle,
-  Download, Eye, ChevronDown, ChevronUp,
+  Download, Eye, ChevronDown, ChevronUp, Box, Square,
   Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight,
   Layers, CopyPlus, FlipHorizontal2, FlipVertical2,
   ArrowUpToLine, ArrowDownToLine, Sparkles, CircleDot,
-  Sticker, Shapes,
+  Sticker,
 } from 'lucide-react';
 import TshirtCanvas from './TshirtCanvas';
+import Tshirt2DPreview from './Tshirt2DPreview';
 import FabricCanvas from './FabricCanvas';
-import { captureCanvasBlob, downloadCanvasAsPNG, dataURLToBlob } from './designerHelpers';
-import { getMockupUrl, getWomensMockupUrl } from './designerMockups';
+import {
+  captureCanvasBlob,
+  downloadCanvasAsPNG,
+  dataURLToBlob,
+  loadFabricAssetImage,
+  loadFabricImageFromFile,
+} from './designerHelpers';
+import { getMockupUrl } from './designerMockups';
 import {
   CANVAS_CONFIG,
   TSHIRT_FRONT_PATH,
@@ -340,8 +347,7 @@ function renderCurvedText({ text, font, fontSize, fill, curve, strokeColor, stro
    ═══════════════════════════════════════════════════════════════ */
 const TOOL_TABS = [
   { id: 'text', label: 'Text', Icon: Type },
-  { id: 'shapes', label: 'Shapes', Icon: Shapes },
-  { id: 'clipart', label: 'Clip Art', Icon: Sticker },
+  { id: 'clipart', label: 'Assets', Icon: Sticker },
   { id: 'image', label: 'Image', Icon: ImagePlus },
   { id: 'effects', label: 'Effects', Icon: Sparkles },
 ];
@@ -354,26 +360,19 @@ export default function DesignerPanel({
   onSave,
   onSnapshot,
   saving = false,
-  shirtStyle: shirtStyleProp = 'mens',
 }) {
   // --- Core state ---
   const [tshirtColor, setTshirtColor] = useState('#FFFFFF');
-  // Truekin is unisex-only. The studio always uses the "mens" base geometry
-  // (relabeled "Unisex Fit" in the UI), regardless of any legacy saved value.
-  const [shirtStyle, setShirtStyle] = useState('mens');
-  // eslint-disable-next-line no-unused-vars
-  const _setShirtStyleUnused = setShirtStyle; // kept so downstream code still works
   const [selectedView, setSelectedView] = useState('front');
+  // Which rendering of the shirt the left column shows: the orbitable 3D
+  // model, or the flat 2D composite the customer sees on the product page.
+  const [previewMode, setPreviewMode] = useState('3d');
   const [frontTexture, setFrontTexture] = useState(null);
   const [backTexture, setBackTexture] = useState(null);
   const [selectedObject, setSelectedObject] = useState(null);
   const [capturing, setCapturing] = useState(false);
   const [capturing2D, setCapturing2D] = useState(false);
   const [activeToolTab, setActiveToolTab] = useState(null);
-
-  // Women's dynamically recolored mockup URLs
-  const [womensFrontMockup, setWomensFrontMockup] = useState(null);
-  const [womensBackMockup, setWomensBackMockup] = useState(null);
 
   // --- Text editing ---
   const [editText, setEditText] = useState('');
@@ -394,7 +393,7 @@ export default function DesignerPanel({
   const [editShadowOffsetY, setEditShadowOffsetY] = useState(2);
 
   // --- Shape editing ---
-  const [shapeFill, setShapeFill] = useState('#3b82f6');
+  const [shapeFill, setShapeFill] = useState('#0a0a0a');
   const [shapeStroke, setShapeStroke] = useState('');
   const [shapeStrokeWidth, setShapeStrokeWidth] = useState(0);
   const [objectOpacity, setObjectOpacity] = useState(100);
@@ -409,7 +408,7 @@ export default function DesignerPanel({
   const [curveStrokeWidth, setCurveStrokeWidth] = useState(0);
 
   // --- Clip art filter ---
-  const [clipCategory, setClipCategory] = useState('Popular');
+  const [clipCategory, setClipCategory] = useState(CLIPART_CATEGORIES[0]?.name || 'Studio Picks');
   const [fontFilter, setFontFilter] = useState('all');
 
   // --- Selection count for multi-select ---
@@ -424,19 +423,6 @@ export default function DesignerPanel({
   const threeCanvasRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  // --- Generate women's mockup URLs when color or style changes ---
-  useEffect(() => {
-    if (shirtStyle !== 'womens') return;
-    let cancelled = false;
-    getWomensMockupUrl(tshirtColor, 'front').then((url) => {
-      if (!cancelled) setWomensFrontMockup(url);
-    });
-    getWomensMockupUrl(tshirtColor, 'back').then((url) => {
-      if (!cancelled) setWomensBackMockup(url);
-    });
-    return () => { cancelled = true; };
-  }, [tshirtColor, shirtStyle]);
-
   // --- Load saved design data on mount ---
   useEffect(() => {
     if (!designData) return;
@@ -444,6 +430,7 @@ export default function DesignerPanel({
       const data = typeof designData === 'string' ? JSON.parse(designData) : designData;
       if (data.tshirtColor) setTshirtColor(data.tshirtColor);
       // Ignore legacy data.shirtStyle ('mens' | 'womens') — Truekin is unisex-only.
+      // Everything renders on the single unisex cut.
       setTimeout(() => {
         if (data.frontObjects && frontCanvasRef.current) {
           frontCanvasRef.current.loadObjects(data.frontObjects);
@@ -535,31 +522,27 @@ export default function DesignerPanel({
     setTimeout(() => handleDesignChange(selectedView), 200);
   };
 
-  const handleAddImage = (e) => {
+  const handleAddImage = async (e) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const imgEl = new Image();
-      imgEl.src = ev.target.result;
-      imgEl.onload = () => {
-        const img = new fabric.Image(imgEl);
-        const maxW = CANVAS_CONFIG.width * 0.5;
-        const maxH = CANVAS_CONFIG.height * 0.5;
-        if (img.width > maxW || img.height > maxH) {
-          img.scale(Math.min(maxW / img.width, maxH / img.height));
-        }
-        const canvas = activeCanvasRef.current?.getCanvas();
-        if (!canvas) return;
-        img.set({
-          left: (canvas.width - img.getScaledWidth()) / 2,
-          top: (canvas.height - img.getScaledHeight()) / 2,
-        });
-        addToCanvas(img);
-      };
-    };
-    reader.readAsDataURL(file);
     e.target.value = '';
+    if (!file) return;
+    try {
+      const img = await loadFabricImageFromFile(fabric, file);
+      const maxW = CANVAS_CONFIG.width * 0.5;
+      const maxH = CANVAS_CONFIG.height * 0.5;
+      if (img.width > maxW || img.height > maxH) {
+        img.scale(Math.min(maxW / img.width, maxH / img.height));
+      }
+      const canvas = activeCanvasRef.current?.getCanvas();
+      if (!canvas) return;
+      img.set({
+        left: (canvas.width - img.getScaledWidth()) / 2,
+        top: (canvas.height - img.getScaledHeight()) / 2,
+      });
+      addToCanvas(img);
+    } catch (error) {
+      console.warn(error);
+    }
   };
 
   const handleAddText = (preset) => {
@@ -600,13 +583,48 @@ export default function DesignerPanel({
   };
 
   const handleAddShape = (shapeDef) => {
+    const canvas = activeCanvasRef.current?.getCanvas();
+    if (!canvas) return;
     const obj = shapeDef.create(fabric);
+    obj.set({
+      fill: shapeFill,
+      originX: 'center',
+      originY: 'center',
+      left: canvas.width / 2,
+      top: canvas.height / 2,
+    });
     addToCanvas(obj);
   };
 
-  const handleAddClipart = (item) => {
+  const handleAddClipart = async (item) => {
     const canvas = activeCanvasRef.current?.getCanvas();
     if (!canvas) return;
+
+    if (item.shapeId) {
+      const shape = SHAPE_DEFS.find((definition) => definition.id === item.shapeId);
+      if (shape) handleAddShape(shape);
+      return;
+    }
+
+    if (item.src) {
+      try {
+        const image = await loadFabricAssetImage(fabric, item.src);
+        const maxW = CANVAS_CONFIG.width * 0.58;
+        const maxH = CANVAS_CONFIG.height * 0.58;
+        if (image.width > maxW || image.height > maxH) {
+          image.scale(Math.min(maxW / image.width, maxH / image.height));
+        }
+        image.set({
+          left: (canvas.width - image.getScaledWidth()) / 2,
+          top: (canvas.height - image.getScaledHeight()) / 2,
+        });
+        addToCanvas(image);
+      } catch (error) {
+        console.warn(error);
+      }
+      return;
+    }
+
     const path = new fabric.Path(item.path, {
       fill: item.fill || '#000',
       stroke: item.stroke || '',
@@ -856,13 +874,13 @@ export default function DesignerPanel({
   // --- Build design state for saving ---
   const getDesignState = useCallback(() => ({
     tshirtColor,
-    shirtStyle,
+    shirtStyle: 'unisex',
     editorType: '3d',
     frontObjects: frontCanvasRef.current?.getObjects() || [],
     backObjects: backCanvasRef.current?.getObjects() || [],
     frontTexture: frontCanvasRef.current?.getTextureDataURL() || null,
     backTexture: backCanvasRef.current?.getTextureDataURL() || null,
-  }), [tshirtColor, shirtStyle]);
+  }), [tshirtColor]);
 
   // --- Snapshot (capture 3D view as product image) ---
   const handleSnapshot = async () => {
@@ -909,6 +927,14 @@ export default function DesignerPanel({
     const canvas = threeCanvasRef.current?.getCanvas();
     downloadCanvasAsPNG(canvas);
   };
+
+  // Payload for the flat 2D preview. Memoised because Tshirt2DPreview parses
+  // `designData` in an effect — a new object each render would loop.
+  const flatPreviewData = useMemo(() => ({
+    tshirtColor,
+    frontTexture,
+    backTexture,
+  }), [tshirtColor, frontTexture, backTexture]);
 
   // --- Derived selection flags ---
   const isTextSelected = selectedObject && (selectedObject.type === 'textbox' || selectedObject.type === 'text');
@@ -989,20 +1015,6 @@ export default function DesignerPanel({
     </div>
   );
 
-  const renderShapesPanel = () => (
-    <div style={s.toolContent}>
-      <p style={s.toolSubhead}>Click a shape to add it to canvas</p>
-      <div style={s.shapeGrid}>
-        {SHAPE_DEFS.map((shape) => (
-          <button key={shape.id} type="button" onClick={() => handleAddShape(shape)} style={s.shapeBtn} title={shape.label}>
-            <span style={{ fontSize: 24, lineHeight: 1 }}>{shape.icon}</span>
-            <span style={{ fontSize: 10, color: '#666' }}>{shape.label}</span>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-
   const renderClipartPanel = () => {
     const activeCat = CLIPART_CATEGORIES.find((c) => c.name === clipCategory) || CLIPART_CATEGORIES[0];
     return (
@@ -1023,20 +1035,41 @@ export default function DesignerPanel({
             </button>
           ))}
         </div>
+        {activeCat.name === 'Shapes' && (
+          <div style={s.assetOptions}>
+            <label style={s.assetOptionLabel}>
+              Shape color
+              <input type="color" value={shapeFill} onChange={(event) => setShapeFill(event.target.value)} style={s.colorInput} />
+            </label>
+            <span style={s.assetOptionHint}>Shapes stay editable after you add them.</span>
+          </div>
+        )}
         <div style={s.clipGrid}>
-          {activeCat.items.map((item, i) => (
-            <button key={i} type="button" onClick={() => handleAddClipart(item)} style={s.clipBtn} title={item.label}>
-              <svg viewBox={item.viewBox} style={{ width: 40, height: 40 }}>
-                <path
-                  d={item.path}
-                  fill={item.fill || 'none'}
-                  stroke={item.stroke || 'none'}
-                  strokeWidth={item.strokeWidth || 0}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              <span style={{ fontSize: 9, color: '#666' }}>{item.label}</span>
+          {activeCat.items.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              onClick={() => handleAddClipart(item)}
+              style={{ ...s.clipBtn, background: item.previewBackground || '#fff' }}
+              title={`Add ${item.label}`}
+            >
+              {item.shapeId ? (
+                <span style={{ fontSize: 30, lineHeight: 1, color: shapeFill }}>{item.icon}</span>
+              ) : item.src ? (
+                <img src={item.thumbnail || item.src} alt="" style={s.assetThumb} />
+              ) : (
+                <svg viewBox={item.viewBox} style={{ width: 40, height: 40 }}>
+                  <path
+                    d={item.path}
+                    fill={item.fill || 'none'}
+                    stroke={item.stroke || 'none'}
+                    strokeWidth={item.strokeWidth || 0}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              )}
+              <span style={{ fontSize: 9, color: item.previewBackground ? '#f4f1ea' : '#666' }}>{item.label}</span>
             </button>
           ))}
         </div>
@@ -1390,13 +1423,41 @@ export default function DesignerPanel({
 
   return (
     <div style={s.wrapper}>
-      {/* Left: 3D Preview */}
+      {/* Left: shirt preview — 3D model or flat 2D composite */}
       <div style={s.leftColumn}>
         <div style={s.preview3DLabel}>
-          <span style={{ fontWeight: 600, fontSize: 13 }}>3D Preview</span>
-          <button type="button" onClick={handleDownload} style={s.iconBtn} title="Download PNG">
-            <Download size={14} />
-          </button>
+          <span style={{ fontWeight: 600, fontSize: 13 }}>
+            {previewMode === '3d' ? '3D Preview' : '2D Preview'}
+          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {/* 3D / 2D switch. The 2D side is the flat composite the customer
+                sees on the product page, rendered from the same design data. */}
+            <div style={s.previewModeToggle} role="group" aria-label="Preview mode">
+              <button
+                type="button"
+                onClick={() => setPreviewMode('3d')}
+                style={previewMode === '3d' ? s.previewModeBtnActive : s.previewModeBtn}
+                aria-pressed={previewMode === '3d'}
+                title="Orbitable 3D model"
+              >
+                <Box size={13} /> 3D
+              </button>
+              <button
+                type="button"
+                onClick={() => setPreviewMode('2d')}
+                style={previewMode === '2d' ? s.previewModeBtnActive : s.previewModeBtn}
+                aria-pressed={previewMode === '2d'}
+                title="Flat 2D product view"
+              >
+                <Square size={13} /> 2D
+              </button>
+            </div>
+            {previewMode === '3d' && (
+              <button type="button" onClick={handleDownload} style={s.iconBtn} title="Download PNG">
+                <Download size={14} />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Unisex fit seal — no men's/women's split at Truekin */}
@@ -1412,16 +1473,23 @@ export default function DesignerPanel({
           </div>
         </div>
 
+        {/* Both previews stay mounted: the 3D canvas keeps its WebGL context
+            and the snapshot ref alive even while the 2D view is showing, so
+            Save/Snapshot still work from either mode. */}
         <div style={s.threeContainer}>
-          <TshirtCanvas
-            ref={threeCanvasRef}
-            tshirtColor={tshirtColor}
-            frontTexture={frontTexture}
-            backTexture={backTexture}
-            shirtStyle={shirtStyle}
-            height={460}
-            style={{ borderRadius: 12, background: '#f0f0f0' }}
-          />
+          <div style={{ display: previewMode === '3d' ? 'block' : 'none' }}>
+            <TshirtCanvas
+              ref={threeCanvasRef}
+              tshirtColor={tshirtColor}
+              frontTexture={frontTexture}
+              backTexture={backTexture}
+              height={460}
+              style={{ borderRadius: 12, background: '#f0f0f0' }}
+            />
+          </div>
+          <div style={{ display: previewMode === '2d' ? 'block' : 'none' }}>
+            <Tshirt2DPreview designData={flatPreviewData} style={{ background: '#f0f0f0' }} />
+          </div>
         </div>
 
         {/* T-shirt color swatches */}
@@ -1530,7 +1598,6 @@ export default function DesignerPanel({
         {activeToolTab && (
           <div style={s.toolPanel}>
             {activeToolTab === 'text' && renderTextPanel()}
-            {activeToolTab === 'shapes' && renderShapesPanel()}
             {activeToolTab === 'clipart' && renderClipartPanel()}
             {activeToolTab === 'image' && renderImagePanel()}
             {activeToolTab === 'effects' && renderEffectsPanel()}
@@ -1546,9 +1613,8 @@ export default function DesignerPanel({
                 svgPath={TSHIRT_FRONT_PATH}
                 tshirtColor={tshirtColor}
                 view="front"
-                mockupUrl={shirtStyle === 'womens' ? womensFrontMockup : getMockupUrl(tshirtColor, 'front')}
+                mockupUrl={getMockupUrl(tshirtColor, 'front')}
                 preColored={true}
-                shirtStyle={shirtStyle}
                 onObjectSelect={selectedView === 'front' ? handleObjectSelect : undefined}
                 onDesignChange={handleDesignChange}
               />
@@ -1559,9 +1625,8 @@ export default function DesignerPanel({
                 svgPath={TSHIRT_BACK_PATH}
                 tshirtColor={tshirtColor}
                 view="back"
-                mockupUrl={shirtStyle === 'womens' ? womensBackMockup : getMockupUrl(tshirtColor, 'back')}
+                mockupUrl={getMockupUrl(tshirtColor, 'back')}
                 preColored={true}
-                shirtStyle={shirtStyle}
                 onObjectSelect={selectedView === 'back' ? handleObjectSelect : undefined}
                 onDesignChange={handleDesignChange}
               />
@@ -1664,6 +1729,36 @@ const s = {
   shirtStyleToggle: {
     display: 'flex',
     alignItems: 'stretch',
+  },
+  previewModeToggle: {
+    display: 'inline-flex',
+    border: '1px solid #ddd',
+    borderRadius: 7,
+    overflow: 'hidden',
+  },
+  previewModeBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 4,
+    padding: '4px 9px',
+    fontSize: 11,
+    fontWeight: 600,
+    background: '#fff',
+    color: '#666',
+    border: 'none',
+    cursor: 'pointer',
+  },
+  previewModeBtnActive: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 4,
+    padding: '4px 9px',
+    fontSize: 11,
+    fontWeight: 600,
+    background: 'var(--ink, #0a0a0a)',
+    color: '#f4f1ea',
+    border: 'none',
+    cursor: 'pointer',
   },
   unisexSeal: {
     flex: 1,
@@ -1789,6 +1884,13 @@ const s = {
     padding: '8px 4px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff',
     cursor: 'pointer', gap: 2, transition: 'all 0.15s',
   },
+  assetThumb: { width: 48, height: 48, objectFit: 'contain', display: 'block' },
+  assetOptions: {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+    padding: '8px 10px', marginBottom: 10, borderRadius: 8, background: '#f3f4f6',
+  },
+  assetOptionLabel: { display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 11, fontWeight: 600, color: '#374151' },
+  assetOptionHint: { fontSize: 10, color: '#6b7280' },
 
   // Image upload
   uploadArea: {

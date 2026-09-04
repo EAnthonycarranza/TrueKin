@@ -45,7 +45,7 @@ export default function AdminOrders() {
       description={`${orders.length} ${orders.length === 1 ? 'order' : 'orders'}`}
     >
       {/* Status filter chips */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+      <div className="admin-order-filters" style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
         {statusFilters.map((s) => (
           <button
             key={s.v}
@@ -60,8 +60,8 @@ export default function AdminOrders() {
       {loading ? (
         <div className="loading-page"><div className="spinner" /></div>
       ) : (
-        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-          <div className="table-wrap">
+        <div className="card admin-orders-card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div className="table-wrap admin-mobile-table admin-orders-table">
             <table>
               <thead>
                 <tr>
@@ -89,7 +89,7 @@ export default function AdminOrders() {
                 ) : (
                   orders.map((order) => (
                     <tr key={order._id}>
-                      <td>
+                      <td data-label="Order">
                         <Link
                           to={`/admin/orders/${order._id}`}
                           className="mono"
@@ -98,26 +98,28 @@ export default function AdminOrders() {
                           #{order._id.slice(-8)}
                         </Link>
                       </td>
-                      <td>
-                        <div style={{ fontWeight: 500 }}>
+                      <td data-label="Customer">
+                        <div className="admin-customer-name" style={{ fontWeight: 500 }}>
                           {order.user?.name || order.guestEmail || 'Guest'}
                         </div>
-                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                          {order.user?.email || order.guestEmail || ''}
-                        </div>
+                        {order.user?.email && (
+                          <div className="admin-customer-email" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                            {order.user.email}
+                          </div>
+                        )}
                       </td>
-                      <td style={{ color: 'var(--text-secondary)' }}>
+                      <td data-label="Items" style={{ color: 'var(--text-secondary)' }}>
                         {order.items.length} {order.items.length === 1 ? 'item' : 'items'}
                       </td>
-                      <td style={{ fontWeight: 700 }}>
+                      <td data-label="Total" style={{ fontWeight: 700 }}>
                         ${(order.totalAmount / 100).toFixed(2)}
                       </td>
-                      <td>
+                      <td data-label="Status">
                         <span className={`badge ${statusBadge[order.status] || 'badge-gray'}`}>
                           {order.status}
                         </span>
                       </td>
-                      <td>
+                      <td data-label="Tracking">
                         {order.shippoTrackingNumber ? (
                           <a
                             href={order.shippoTrackingUrl}
@@ -132,11 +134,11 @@ export default function AdminOrders() {
                           <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>—</span>
                         )}
                       </td>
-                      <td style={{ color: 'var(--text-muted)', fontSize: 13 }}>
+                      <td data-label="Date" style={{ color: 'var(--text-muted)', fontSize: 13 }}>
                         {new Date(order.createdAt).toLocaleDateString()}
                       </td>
-                      <td style={{ textAlign: 'right' }}>
-                        <Link to={`/admin/orders/${order._id}`} className="btn btn-secondary btn-sm">
+                      <td data-label="Actions" className="admin-actions-cell" style={{ textAlign: 'right' }}>
+                        <Link to={`/admin/orders/${order._id}`} className="btn btn-secondary btn-sm" aria-label={`View order ${order._id.slice(-8)}`}>
                           <Eye size={14} /> View
                         </Link>
                       </td>

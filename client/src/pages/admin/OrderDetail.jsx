@@ -168,12 +168,12 @@ export default function AdminOrderDetail() {
 
   return (
     <AdminLayout>
-      <div style={{ maxWidth: 1100 }}>
+      <div className="admin-order-detail" style={{ maxWidth: 1100 }}>
         <button onClick={() => navigate('/admin/orders')} className="btn btn-secondary btn-sm" style={{ marginBottom: 18 }}>
           <ArrowLeft size={14} /> Back to Orders
         </button>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28, flexWrap: 'wrap', gap: 16 }}>
+        <div className="admin-order-detail-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28, flexWrap: 'wrap', gap: 16 }}>
           <div>
             <h1 style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.02em', fontFamily: 'var(--font-body)' }} className="mono">
               Order #{order._id.slice(-8)}
@@ -182,7 +182,7 @@ export default function AdminOrderDetail() {
               Placed {new Date(order.createdAt).toLocaleString()}
             </p>
           </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div className="admin-order-detail-badges" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <span className={`badge ${statusBadge[order.status] || 'badge-gray'}`} style={{ fontSize: 13, padding: '6px 14px' }}>
               {order.status}
             </span>
@@ -197,7 +197,7 @@ export default function AdminOrderDetail() {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+        <div className="admin-order-detail-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
           {/* LEFT */}
           <div>
             <div className="card" style={{ marginBottom: 16 }}>
@@ -213,7 +213,7 @@ export default function AdminOrderDetail() {
                     <p style={{ fontWeight: 500, fontSize: 14 }}>{item.title}</p>
                     <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                       Qty: {item.quantity}
-                      {item.shirtStyle && <> · {item.shirtStyle === 'womens' ? "Women's" : "Men's"}</>}
+                      {item.shirtStyle && <> · Unisex</>}
                       {item.size && <> · Size: {item.size}</>}
                       {item.color && <> · {item.color}</>}
                     </p>
@@ -322,7 +322,7 @@ export default function AdminOrderDetail() {
             {/* Update Status */}
             <div className="card" style={{ marginBottom: 16 }}>
               <h3 style={styles.sectionTitle}>Update Status</h3>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div className="admin-status-update" style={{ display: 'flex', gap: 8 }}>
                 <select className="input" value={statusUpdate} onChange={(e) => setStatusUpdate(e.target.value)}>
                   <option value="pending">Pending</option>
                   <option value="paid">Paid</option>
@@ -396,7 +396,7 @@ export default function AdminOrderDetail() {
                     <p style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                       <Package size={13} /> Parcel
                     </p>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+                    <div className="admin-parcel-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
                       {['length', 'width', 'height', 'weight'].map((f) => (
                         <label key={f} style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                           {f} ({f === 'weight' ? parcel.massUnit : parcel.distanceUnit})

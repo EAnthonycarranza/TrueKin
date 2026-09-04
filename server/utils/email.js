@@ -24,8 +24,7 @@ function money(cents) {
 }
 
 function itemLine(item) {
-  const style = item.shirtStyle === 'womens' ? "Women's" : "Men's";
-  const extras = [style, item.size ? `Size ${item.size}` : null, item.color || null]
+  const extras = ['Unisex', item.size ? `Size ${item.size}` : null, item.color || null]
     .filter(Boolean)
     .join(' · ');
   

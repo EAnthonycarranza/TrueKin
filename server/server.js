@@ -26,8 +26,8 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(cookieParser());
 
-// Serve uploaded images
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Serve uploaded images (Cloudflare R2 when configured, else local disk)
+app.use('/uploads', require('./routes/uploads'));
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));

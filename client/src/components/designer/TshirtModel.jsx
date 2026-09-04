@@ -1,11 +1,21 @@
 /**
  * TshirtModel – Three.js 3D t-shirt using the high-detail shirt_baked_collapsed.glb
- * model (10,513 vertices, baked normal/occlusion maps) from T-Shirt Configurator.
+ * model (10,513 vertices, baked normal/occlusion maps).
+ *
+ * Truekin is unisex-only: one cut, one geometry. There is no men's/women's split.
+ *
+ * Realism notes — the GLB's `lambert1` material carries two baked maps that make
+ * or break the look:
+ *   • normalTexture  – a fabric weave, tiled 8×8 via KHR_texture_transform
+ *   • occlusionTexture – baked AO in the seams, collar, sleeve creases and hem
+ * Both are reused here on a MeshPhysicalMaterial with cloth `sheen`, which is what
+ * separates "cotton jersey" from "shiny plastic". Building a bare material and
+ * dropping these maps (as an earlier revision did) flattens the shirt completely.
  *
  * Uses direct THREE.Texture from an <img> element instead of useTexture/drei
  * so that data-URL changes are picked up immediately without caching issues.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useGLTF, Decal, Center } from '@react-three/drei';
 import { useThree, useFrame } from '@react-three/fiber';
 import { easing } from 'maath';
@@ -19,6 +29,7 @@ const MODEL_PATH = '/models/shirt_baked_collapsed.glb';
  */
 function useDataURLTexture(src) {
   const [texture, setTexture] = useState(null);
+  const maxAnisotropy = useThree((state) => state.gl.capabilities.getMaxAnisotropy());
 
   useEffect(() => {
     if (!src) { setTexture(null); return; }
@@ -29,6 +40,11 @@ function useDataURLTexture(src) {
       const tex = new THREE.Texture(img);
       tex.colorSpace = THREE.SRGBColorSpace;
       tex.flipY = true;
+      // Keeps the print crisp when the shirt is orbited to a glancing angle
+      tex.anisotropy = maxAnisotropy;
+      tex.minFilter = THREE.LinearMipmapLinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      tex.generateMipmaps = true;
       tex.needsUpdate = true;
       setTexture(tex);
     };
@@ -38,112 +54,22 @@ function useDataURLTexture(src) {
     return () => {
       setTexture((prev) => { prev?.dispose(); return null; });
     };
-  }, [src]);
+  }, [src, maxAnisotropy]);
 
   return texture;
 }
 
 /**
- * Transform men's t-shirt geometry into a women's fitted silhouette.
- * Uses Gaussian-weighted vertex displacement for waist cinch, bust curvature,
- * hip shaping, shoulder narrowing, and sleeve shortening.
+ * Print artwork.
+ *
+ * Deliberately does NOT reuse the shirt's normal map: that texture is authored
+ * against the shirt's UVs with a KHR_texture_transform of scale 8 / offset -7,
+ * while a Decal carries its own projected UV set. Sharing it tiles the weave
+ * eight times across the artwork and rings the print with a dark halo.
+ *
+ * Roughness is matched to the fabric so the print shades with the garment
+ * rather than floating above it.
  */
-function createWomensGeometry(sourceGeometry) {
-  const geo = sourceGeometry.clone();
-  const pos = geo.attributes.position;
-
-  // Compute bounding box to normalize coordinates
-  geo.computeBoundingBox();
-  const bb = geo.boundingBox;
-  const minY = bb.min.y;
-  const maxY = bb.max.y;
-  const height = maxY - minY;
-
-  // Estimate torso width from bounding box
-  const maxAbsX = Math.max(Math.abs(bb.min.x), Math.abs(bb.max.x));
-  const torsoXLimit = maxAbsX * 0.55;
-  const sleeveXStart = maxAbsX * 0.50;
-
-  const gauss = (val, center, sigma) => {
-    const d = (val - center) / sigma;
-    return Math.exp(-0.5 * d * d);
-  };
-
-  for (let i = 0; i < pos.count; i++) {
-    let x = pos.getX(i);
-    const y = pos.getY(i);
-    let z = pos.getZ(i);
-
-    const t = (y - minY) / height; // 0 = bottom hem, 1 = top collar
-    const absX = Math.abs(x);
-    const sign = x >= 0 ? 1 : -1;
-    const isTorso = absX < torsoXLimit;
-    const blend = isTorso ? 1.0 : Math.max(0, 1.0 - (absX - torsoXLimit) / (maxAbsX * 0.15));
-
-    // --- Sleeve shortening: uniformly scale sleeve vertices toward the torso ---
-    if (absX > sleeveXStart && t > 0.50 && t < 0.90) {
-      const sleeveDepth = (absX - sleeveXStart) / (maxAbsX * 0.45);
-      const sleeveT = Math.min(sleeveDepth, 1.0);
-      const inwardScale = 1.0 - 0.40 * sleeveT;
-      x = sign * (sleeveXStart + (absX - sleeveXStart) * inwardScale);
-    }
-
-    if (blend <= 0) {
-      pos.setX(i, x);
-      continue;
-    }
-
-    // Waist cinch
-    const waistFactor = gauss(t, 0.38, 0.10);
-    const waistScale = 1.0 - 0.08 * waistFactor;
-
-    // Hip area
-    const hipFactor = gauss(t, 0.12, 0.08);
-    const hipScale = 1.0 + 0.06 * hipFactor;
-
-    // Bust area
-    const bustWidthFactor = gauss(t, 0.58, 0.10);
-    const bustWidthScale = 1.0 + 0.04 * bustWidthFactor;
-
-    let bustZPush = 0;
-    if (z > 0) {
-      const bustZFactor = gauss(t, 0.58, 0.08);
-      bustZPush = 0.02 * (maxAbsX / 0.17) * bustZFactor; // scale proportionally
-    }
-
-    // Overall fit
-    const fitScale = 0.92;
-
-    // Shoulder narrowing
-    const shoulderFactor = gauss(t, 0.82, 0.10);
-    const shoulderScale = 1.0 - 0.14 * shoulderFactor;
-
-    // Hem taper
-    const hemFactor = t < 0.05 ? (0.05 - t) / 0.05 : 0;
-    const hemScale = 1.0 + 0.02 * hemFactor;
-
-    // Slightly shorter
-    const yStretch = 1.01;
-
-    const totalXScale = fitScale * waistScale * hipScale * bustWidthScale * shoulderScale * hemScale;
-    const newX = x * (1.0 + (totalXScale - 1.0) * blend);
-
-    let newZ = z;
-    if (z > 0) {
-      newZ = z * (1.0 - 0.20 * blend);
-    }
-    newZ = newZ + bustZPush * blend;
-
-    const centerY = (minY + maxY) / 2;
-    const newY = centerY + (y - centerY) * (1.0 + (yStretch - 1.0) * blend);
-
-    pos.setXYZ(i, newX, newY, newZ);
-  }
-
-  geo.computeVertexNormals();
-  return geo;
-}
-
 function DesignDecal({ src, position, rotation, scale }) {
   const tex = useDataURLTexture(src);
   if (!tex) return null;
@@ -151,10 +77,11 @@ function DesignDecal({ src, position, rotation, scale }) {
     <Decal position={position} rotation={rotation} scale={scale}>
       <meshStandardMaterial
         map={tex}
-        toneMapped={false}
+        roughness={0.9}
+        metalness={0}
         transparent
         polygonOffset
-        polygonOffsetFactor={-1}
+        polygonOffsetFactor={-2}
       />
     </Decal>
   );
@@ -165,56 +92,81 @@ export default function TshirtModel({
   frontTexture,
   backTexture,
   isMobile = false,
-  shirtStyle = 'mens',
 }) {
   const { nodes, materials } = useGLTF(MODEL_PATH);
+  const maxAnisotropy = useThree((state) => state.gl.capabilities.getMaxAnisotropy());
 
-  // Create women's geometry from the base model (memoized)
-  const womensGeometry = useMemo(() => {
-    if (shirtStyle !== 'womens' || !nodes.T_Shirt_male) return null;
-    return createWomensGeometry(nodes.T_Shirt_male.geometry);
-  }, [shirtStyle, nodes]);
+  const baseMaterial = materials.lambert1;
 
-  // Create a proper MeshStandardMaterial (the GLB may have MeshLambertMaterial
-  // which doesn't support roughness/metalness and may have back-face issues)
+  /**
+   * Cloth material. Built once, then the colour is eased per-frame.
+   *
+   * The maps are lifted off the GLTF material rather than re-created, which
+   * preserves the KHR_texture_transform tiling (8×8) and the uv channel that
+   * GLTFLoader resolved — re-loading them by hand would lose both.
+   */
   const shirtMaterial = useMemo(() => {
-    const mat = new THREE.MeshStandardMaterial({
-      roughness: 1,
-      metalness: 0,
-      side: THREE.DoubleSide,
+    const mat = new THREE.MeshPhysicalMaterial({
       color: new THREE.Color(tshirtColor),
+      // Cotton jersey is rough but not perfectly matte — a touch under 1 keeps
+      // a faint sense of curvature on the shoulders and sleeves.
+      roughness: 0.82,
+      metalness: 0,
+      // Sheen is the cloth term: a soft retro-reflective rim along grazing
+      // angles. Without it, fabric reads as painted rubber.
+      //
+      // sheenColor tracks the shirt colour (see useFrame). A white sheen over
+      // a saturated dye lays a bright grey veil across the whole garment and
+      // turns e.g. a #e02d27 red into salmon — dyed cotton scatters in its own
+      // hue, not white.
+      sheen: 0.35,
+      sheenRoughness: 0.9,
+      sheenColor: new THREE.Color(tshirtColor),
+      side: THREE.DoubleSide,
+      shadowSide: THREE.FrontSide,
+      envMapIntensity: 0.7,
     });
-    return mat;
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Smoothly animate shirt color using maath easing
+    if (baseMaterial?.normalMap) {
+      mat.normalMap = baseMaterial.normalMap;
+      mat.normalMap.anisotropy = maxAnisotropy;
+      // The GLB authors the weave at scale 2.81, which is punchy for a hero
+      // render but noisy at editor size; dial it back for a knit, not burlap.
+      mat.normalScale = new THREE.Vector2(0.85, 0.85);
+    }
+
+    if (baseMaterial?.aoMap) {
+      mat.aoMap = baseMaterial.aoMap;
+      // Never above 1: the map is already baked fairly dark, and pushing it
+      // further crushes the hem and underarms into flat black.
+      mat.aoMapIntensity = 0.9;
+    }
+
+    mat.needsUpdate = true;
+    return mat;
+  }, [baseMaterial, maxAnisotropy]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => () => shirtMaterial.dispose(), [shirtMaterial]);
+
+  // Smoothly animate shirt colour using maath easing. Sheen is eased to the
+  // same target so the cloth highlight stays in the garment's own hue.
   useFrame((state, delta) => {
     if (shirtMaterial) {
       easing.dampC(shirtMaterial.color, tshirtColor, 0.2, delta);
+      easing.dampC(shirtMaterial.sheenColor, tshirtColor, 0.2, delta);
     }
   });
 
   const hasContent = (url) => url && url.length > 500;
 
-  const geometry = shirtStyle === 'womens' && womensGeometry
-    ? womensGeometry
-    : nodes.T_Shirt_male.geometry;
+  const geometry = nodes.T_Shirt_male.geometry;
 
-  // Decal positions/scales — 1:1 match with 2D canvas design area
-  // The 2D canvas (450×500) design zone maps to the full printable chest area
-  const frontDecalPos = shirtStyle === 'womens'
-    ? [0, 0.04, 0.14]
-    : [0, 0.04, 0.15];
-  const frontDecalScale = shirtStyle === 'womens'
-    ? [0.32, 0.38, 0.32]
-    : [0.36, 0.42, 0.36];
-
-  const backDecalPos = shirtStyle === 'womens'
-    ? [0, 0.04, -0.14]
-    : [0, 0.04, -0.15];
-  const backDecalScale = shirtStyle === 'womens'
-    ? [0.32, 0.38, 0.32]
-    : [0.36, 0.42, 0.36];
+  // Decal positions/scales — 1:1 match with 2D canvas design area.
+  // The 2D canvas (450×500) design zone maps to the full printable chest area.
+  const frontDecalPos = [0, 0.04, 0.15];
+  const frontDecalScale = [0.36, 0.42, 0.36];
+  const backDecalPos = [0, 0.04, -0.15];
+  const backDecalScale = [0.36, 0.42, 0.36];
 
   return (
     <Center>

@@ -13,6 +13,7 @@
 import { useEffect, useRef, useCallback, useImperativeHandle, forwardRef, useState } from 'react';
 import * as fabric from 'fabric';
 import { CANVAS_CONFIG } from './designerConstants';
+import { PRINT_AREA } from '../shirt3d/printArea';
 
 /**
  * Tint a white mockup image with a color using canvas multiply blend mode.
@@ -79,8 +80,14 @@ function drawMockupDirect(ctx, mockupImg, w, h) {
   ctx.drawImage(mockupImg, ix, iy, iw, ih);
 }
 
+/**
+ * Printable zone as a fraction of the canvas, for the one unisex cut.
+ * Shared with the 3D studio (shirt3d/printArea.js) so the on-canvas guide, the
+ * Fabric clipPath and the 3D decal placement can never drift apart.
+ */
+
 const FabricCanvas = forwardRef(function FabricCanvas(
-  { svgPath, tshirtColor, view, mockupUrl, preColored = false, shirtStyle = 'mens', onCanvasReady, onObjectSelect, onDesignChange },
+  { svgPath, tshirtColor, view, mockupUrl, preColored = false, printArea = PRINT_AREA, onCanvasReady, onObjectSelect, onDesignChange },
   ref
 ) {
   const canvasElRef = useRef(null);
@@ -136,12 +143,11 @@ const FabricCanvas = forwardRef(function FabricCanvas(
         // Pre-colored mockup: draw directly without tinting
         drawMockupDirect(ctx, mockupImgRef.current, w, h);
 
-        // Draw subtle print area guide (smaller for women's fitted shirt)
-        const isWomens = shirtStyle === 'womens';
-        const px = w * (isWomens ? 0.30 : 0.27);
-        const py = h * (isWomens ? 0.22 : 0.2);
-        const pw = w * (isWomens ? 0.40 : 0.46);
-        const ph = h * (isWomens ? 0.42 : 0.48);
+        // Draw subtle print area guide
+        const px = w * printArea.x;
+        const py = h * printArea.y;
+        const pw = w * printArea.w;
+        const ph = h * printArea.h;
         ctx.save();
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
         ctx.lineWidth = 1;
@@ -166,12 +172,12 @@ const FabricCanvas = forwardRef(function FabricCanvas(
       ctx.stroke(path);
       ctx.restore();
     }
-  }, [tshirtColor, svgPath, preColored, shirtStyle]); // mockupImgRef is a ref, doesn't need to be in deps
+  }, [tshirtColor, svgPath, preColored, printArea]); // mockupImgRef is a ref, doesn't need to be in deps
 
-  // Re-render background when color, style, or mockup changes
+  // Re-render background when color or mockup changes
   useEffect(() => {
     renderBackground();
-  }, [renderBackground, mockupLoaded, mockupKey, tshirtColor, shirtStyle]);
+  }, [renderBackground, mockupLoaded, mockupKey, tshirtColor]);
 
   // Expose canvas to parent
   useImperativeHandle(ref, () => ({
@@ -298,17 +304,16 @@ const FabricCanvas = forwardRef(function FabricCanvas(
       // how professional mockup tools define the printable zone.
       const w = CANVAS_CONFIG.width;
       const h = CANVAS_CONFIG.height;
-      const isW = shirtStyle === 'womens';
-      const printArea = new fabric.Rect({
-        width:  w * (isW ? 0.40 : 0.46),
-        height: h * (isW ? 0.42 : 0.48),
-        left:   w * (isW ? 0.30 : 0.27),
-        top:    h * (isW ? 0.22 : 0.2),
+      const printClip = new fabric.Rect({
+        width:  w * printArea.w,
+        height: h * printArea.h,
+        left:   w * printArea.x,
+        top:    h * printArea.y,
         originX: 'left',
         originY: 'top',
         absolutePositioned: true,
       });
-      canvas.clipPath = printArea;
+      canvas.clipPath = printClip;
     } else if (svgPath) {
       // Tinted SVG mockups: use SVG shirt silhouette clip
       const clipPath = new fabric.Path(svgPath);
@@ -358,30 +363,10 @@ const FabricCanvas = forwardRef(function FabricCanvas(
       canvas.dispose();
       fabricRef.current = null;
     };
-  }, [svgPath, view]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Update clip path when shirtStyle changes (for preColored mockups)
-  useEffect(() => {
-    const canvas = fabricRef.current;
-    if (!canvas || !preColored) return;
-    const w = CANVAS_CONFIG.width;
-    const h = CANVAS_CONFIG.height;
-    const isW = shirtStyle === 'womens';
-    const printArea = new fabric.Rect({
-      width:  w * (isW ? 0.40 : 0.46),
-      height: h * (isW ? 0.42 : 0.48),
-      left:   w * (isW ? 0.30 : 0.27),
-      top:    h * (isW ? 0.22 : 0.2),
-      originX: 'left',
-      originY: 'top',
-      absolutePositioned: true,
-    });
-    canvas.clipPath = printArea;
-    canvas.requestRenderAll();
-  }, [shirtStyle, preColored]);
+  }, [svgPath, view, printArea]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div style={{ position: 'relative', width: CANVAS_CONFIG.width, height: CANVAS_CONFIG.height }}>
+    <div className="tk-fabric-canvas" style={{ position: 'relative', width: CANVAS_CONFIG.width, height: CANVAS_CONFIG.height }}>
       {/* Background: tinted mockup image (rendered via <canvas>) */}
       <canvas
         ref={bgCanvasRef}

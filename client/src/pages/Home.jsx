@@ -566,7 +566,7 @@ export default function Home() {
             <h2 className="home-section-title display">Real fits. Real faith.</h2>
             <span className="rule" aria-hidden />
           </div>
-          <div className="grid grid-3">
+          <div className="grid grid-3 home-reviews-grid">
             {[
               { name: 'Micah T.', quote: 'Ordered the Kingdom Heavyweight on a Bella + Canvas 3001 — the press is clean, the graphic is crisp, and the fit is honest. Already ordered two more.', role: 'Youth pastor · Verified buyer' },
               { name: 'Sarah L.', quote: 'You can tell every shirt was pressed by an actual person. Mine came with a hand-written Psalm 23 note. That\'s not merch, that\'s ministry.', role: 'Small-group leader · Verified buyer' },
@@ -1472,6 +1472,146 @@ export default function Home() {
           max-width: 380px;
           margin-left: auto;
           margin-right: auto;
+        }
+
+        /* ---------------- MOBILE-FIRST POLISH ---------------- */
+        @media (max-width: 640px) {
+          .home-hero {
+            padding: 32px 0 54px;
+          }
+          .home-hero-inner { gap: 28px; }
+          .home-hero-tag {
+            width: 100%;
+            min-height: 44px;
+            margin-bottom: 22px;
+            padding: 8px 12px;
+            justify-content: center;
+            font-size: 10px;
+            line-height: 1.45;
+            text-align: center;
+          }
+          .home-hero-title {
+            font-size: clamp(58px, 19vw, 74px);
+            line-height: 0.89;
+          }
+          .home-hero-desc {
+            margin: 20px 0 24px;
+            font-size: 15px;
+            line-height: 1.62;
+          }
+          .home-hero-cta {
+            display: grid;
+            grid-template-columns: 1fr;
+            margin-bottom: 30px;
+          }
+          .home-hero-cta .btn { width: 100%; }
+          .home-hero-proof { align-items: flex-start; gap: 12px; }
+          .home-proof-text { line-height: 1.45; }
+          .home-hero-visual {
+            width: 100%;
+            height: 260px;
+            max-width: 344px;
+          }
+          .home-hero-card { width: 136px; padding: 10px; }
+          .home-hero-card-1 { left: 0; }
+          .home-hero-card-2 { right: 0; }
+          .home-hero-card-3 { left: 30%; }
+          .home-hero-card-tag { margin-bottom: 7px; font-size: 8px; }
+          .home-hero-card-info { font-size: 9px; gap: 4px; }
+
+          .home-marquee { padding: 14px 0; }
+          .home-marquee-row { gap: 26px; padding-right: 26px; }
+          .home-marquee-item { gap: 26px; font-size: 22px; }
+
+          .home-section,
+          .home-craft,
+          .home-quote,
+          .home-newsletter { padding: 56px 0; }
+          .home-promo { padding: 24px 0 56px; }
+          .home-section-head,
+          .home-craft-head { margin-bottom: 28px; }
+          .home-section-title,
+          .home-craft-title { font-size: 40px; }
+          .home-view-all { min-height: 44px; }
+
+          .home-who { padding-bottom: 34px; }
+          .home-who-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 26px;
+          }
+          .home-who-card { padding: 16px 14px 18px; }
+          .home-who-icon {
+            width: 40px;
+            height: 40px;
+            margin-bottom: 12px;
+          }
+          .home-who-card h4 { font-size: 13px; line-height: 1.2; }
+          .home-who-card p { font-size: 12.5px; line-height: 1.48; }
+
+          .home-categories,
+          .home-craft-steps,
+          .home-reviews-grid {
+            display: flex;
+            gap: 12px;
+            margin-right: -16px;
+            padding-right: 16px;
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            scrollbar-width: none;
+          }
+          .home-categories::-webkit-scrollbar,
+          .home-craft-steps::-webkit-scrollbar,
+          .home-reviews-grid::-webkit-scrollbar { display: none; }
+          .home-cat-card,
+          .home-craft-step,
+          .home-reviews-grid > * {
+            width: min(82vw, 310px);
+            flex: 0 0 auto;
+            scroll-snap-align: start;
+          }
+          .home-cat-visual { aspect-ratio: 5 / 3; }
+          .home-cat-visual > svg { width: 96px; height: 96px; }
+          .home-cat-meta { padding: 17px 18px; }
+          .home-cat-meta h3 { font-size: 20px; }
+          .home-craft-step { padding: 20px 18px 22px; }
+          .home-craft-lead { font-size: 14.5px; line-height: 1.62; }
+
+          .home-quote-grid { gap: 28px; }
+          .home-quote-title { font-size: 48px; }
+          .home-quote-card { padding: 20px 16px 18px; }
+          .home-quote-row { grid-template-columns: 1fr; gap: 12px; }
+          .home-quote-field input,
+          .home-quote-field textarea { min-height: 48px; font-size: 16px; }
+
+          .home-features { padding: 44px 0; }
+          .home-features-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 24px 16px;
+          }
+          .home-feature { display: block; }
+          .home-feature-icon { margin-bottom: 10px; }
+          .home-feature h4 { font-size: 12px; line-height: 1.25; }
+          .home-feature p { font-size: 12px; line-height: 1.5; }
+
+          .home-promo-card { padding: 38px 22px 24px; }
+          .home-promo-title { font-size: 48px; }
+          .home-promo-desc { margin-bottom: 24px; font-size: 14.5px; }
+          .home-promo-visual { height: 210px; }
+          .home-promo-tee { width: 146px; }
+          .home-promo-percent { font-size: 100px; }
+          .home-promo-percent small { font-size: 46px; }
+          .home-review { padding: 22px 20px; }
+
+          .home-newsletter-inner { gap: 28px; }
+          .home-newsletter-title { font-size: 46px; }
+          .home-newsletter-form { padding: 5px; }
+          .home-newsletter-input { min-width: 0; padding-inline: 12px; font-size: 16px; }
+        }
+
+        @media (max-width: 400px) {
+          .home-newsletter-form { flex-direction: column; }
+          .home-newsletter-form .btn { width: 100%; }
         }
       `}</style>
     </div>

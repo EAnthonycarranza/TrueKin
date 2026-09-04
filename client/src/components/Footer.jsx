@@ -124,7 +124,12 @@ export default function Footer() {
           .tk-footer-grid { grid-template-columns: 1fr 1fr; gap: 32px; }
         }
         @media (max-width: 520px) {
-          .tk-footer-grid { grid-template-columns: 1fr; gap: 28px; }
+          .tk-footer { padding: 54px 0 24px; }
+          .tk-footer-grid { grid-template-columns: 1fr 1fr; gap: 28px 20px; }
+          .tk-footer-brand { grid-column: 1 / -1; }
+          .tk-footer-col:last-child { grid-column: 1 / -1; }
+          .tk-footer-col h5 { margin-bottom: 12px; }
+          .tk-footer-col a { min-height: 40px; display: flex; align-items: center; padding: 7px 0; }
         }
 
         .tk-footer-brand { max-width: 380px; }

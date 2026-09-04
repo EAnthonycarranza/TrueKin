@@ -22,20 +22,23 @@ exports.createCheckoutSession = async (req, res) => {
         return res.status(404).json({ message: `Product not found: ${item.productId}` });
       }
 
-      // Check size inventory if applicable — match by size + style
+      // Check size inventory if applicable. Truekin is unisex-only, but
+      // products created before the unisex switch still carry size rows tagged
+      // 'mens'/'womens', so fall back to a size-only match for those.
       if (item.size && product.sizes && product.sizes.length > 0) {
-        const itemStyle = item.shirtStyle || 'mens';
-        const sizeEntry = product.sizes.find(
-          (s) => s.size === item.size && (s.style || 'mens') === itemStyle
-        );
+        const itemStyle = item.shirtStyle || 'unisex';
+        const sizeEntry =
+          product.sizes.find(
+            (s) => s.size === item.size && (s.style || 'unisex') === itemStyle
+          ) || product.sizes.find((s) => s.size === item.size);
         if (!sizeEntry) {
           return res.status(400).json({
-            message: `Size ${item.size} (${itemStyle}) not available for ${product.title}`,
+            message: `Size ${item.size} not available for ${product.title}`,
           });
         }
         if (!sizeEntry.unlimited && sizeEntry.quantity < item.quantity) {
           return res.status(400).json({
-            message: `Only ${sizeEntry.quantity} left in size ${item.size} (${itemStyle}) for ${product.title}`,
+            message: `Only ${sizeEntry.quantity} left in size ${item.size} for ${product.title}`,
           });
         }
         if (!sizeEntry.unlimited) {
@@ -44,10 +47,9 @@ exports.createCheckoutSession = async (req, res) => {
         }
       }
 
-      const styleSuffix = item.shirtStyle === 'womens' ? "Women's" : "Men's";
       const itemName = item.size
-        ? `${product.title} (${styleSuffix} / ${item.size})`
-        : `${product.title} (${styleSuffix})`;
+        ? `${product.title} (Unisex / ${item.size})`
+        : `${product.title} (Unisex)`;
 
       lineItems.push({
         price_data: {
@@ -72,7 +74,7 @@ exports.createCheckoutSession = async (req, res) => {
         imageUrl: product.imageUrls[0] || '',
         color: item.color || null,
         size: item.size || null,
-        shirtStyle: item.shirtStyle || 'mens',
+        shirtStyle: 'unisex',
       });
     }
 

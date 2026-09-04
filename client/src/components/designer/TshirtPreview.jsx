@@ -8,11 +8,14 @@
  *
  * Also backwards-compatible with the old format:
  *   { color: {r,g,b}, logo, full, isLogo, isFull, ... }
+ *
+ * Truekin is unisex-only, so any legacy `shirtStyle` on a saved design is
+ * ignored — every product renders on the one unisex cut.
  */
 import { useState, useEffect } from 'react';
 import TshirtCanvas from './TshirtCanvas';
 
-export default function TshirtPreview({ designData, colorOverride, shirtStyleOverride, style = {} }) {
+export default function TshirtPreview({ designData, colorOverride, style = {} }) {
   const [design, setDesign] = useState(null);
 
   useEffect(() => {
@@ -45,8 +48,6 @@ export default function TshirtPreview({ designData, colorOverride, shirtStyleOve
     );
   }
 
-  const savedShirtStyle = design.shirtStyle || 'mens';
-
   // New format (Fabric.js based)
   if (design.tshirtColor !== undefined) {
     return (
@@ -55,7 +56,6 @@ export default function TshirtPreview({ designData, colorOverride, shirtStyleOve
           tshirtColor={colorOverride || design.tshirtColor}
           frontTexture={design.frontTexture || null}
           backTexture={design.backTexture || null}
-          shirtStyle={shirtStyleOverride || savedShirtStyle}
           height={500}
         />
       </div>
@@ -71,7 +71,6 @@ export default function TshirtPreview({ designData, colorOverride, shirtStyleOve
       <TshirtCanvas
         tshirtColor={colorOverride || hexColor}
         frontTexture={design.isLogo ? design.logo : design.isFull ? design.full : null}
-        shirtStyle={shirtStyleOverride || savedShirtStyle}
         height={500}
       />
     </div>

@@ -7,7 +7,7 @@ export const useCartStore = create(
       items: [],
       isOpen: false,
 
-      addItem: (product, quantity = 1, color = null, size = null, shirtStyle = 'mens') => {
+      addItem: (product, quantity = 1, color = null, size = null, shirtStyle = 'unisex') => {
         const items = get().items;
         // Match by product ID + color + size + shirtStyle
         const existingIndex = items.findIndex(
@@ -15,7 +15,7 @@ export const useCartStore = create(
             item.productId === product._id &&
             (item.color || null) === color &&
             (item.size || null) === size &&
-            (item.shirtStyle || 'mens') === shirtStyle
+            (item.shirtStyle || 'unisex') === shirtStyle
         );
 
         if (existingIndex >= 0) {

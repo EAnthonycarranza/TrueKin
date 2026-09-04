@@ -7,8 +7,8 @@ export default function Cart() {
   const totalPrice = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
   return (
-    <div className="page">
-      <div className="container" style={{ maxWidth: 800 }}>
+    <div className="page cart-page">
+      <div className="container cart-container" style={{ maxWidth: 800 }}>
         <div className="page-header">
           <h1>Shopping Cart</h1>
         </div>
@@ -25,10 +25,10 @@ export default function Cart() {
           </div>
         ) : (
           <>
-            <div style={styles.items}>
+            <div className="cart-page-items" style={styles.items}>
               {items.map((item, i) => (
-                <div key={i} style={styles.item}>
-                  <div style={styles.itemImg}>
+                <div key={i} className="cart-page-item" style={styles.item}>
+                  <div className="cart-page-item-img" style={styles.itemImg}>
                     {item.imageUrl ? (
                       <img
                         src={`${item.imageUrl}`}
@@ -41,13 +41,13 @@ export default function Cart() {
                       </div>
                     )}
                   </div>
-                  <div style={styles.itemInfo}>
+                  <div className="cart-page-item-info" style={styles.itemInfo}>
                     <Link to={`/product/${item.productId}`} style={styles.itemTitle}>
                       {item.title}
                     </Link>
                     {(item.color || item.size || item.shirtStyle) && (
                       <p style={styles.itemMeta}>
-                        {item.shirtStyle && <>{item.shirtStyle === 'womens' ? "Women's" : "Men's"}</>}
+                        {item.shirtStyle && <>Unisex</>}
                         {item.shirtStyle && item.size && ' · '}
                         {item.size && <>Size: {item.size}</>}
                         {(item.shirtStyle || item.size) && item.color && ' · '}
@@ -71,20 +71,20 @@ export default function Cart() {
                     <p style={styles.itemMeta}>Qty: {item.quantity}</p>
                     <p style={styles.itemPrice}>${(item.price / 100).toFixed(2)} each</p>
                   </div>
-                  <div style={styles.itemActions}>
-                    <div style={styles.qtyGroup}>
-                      <button style={styles.qtyBtn} onClick={() => updateQuantity(i, item.quantity - 1)}>
+                  <div className="cart-page-item-actions" style={styles.itemActions}>
+                    <div className="cart-page-qty" style={styles.qtyGroup}>
+                      <button aria-label={`Decrease ${item.title} quantity`} style={styles.qtyBtn} onClick={() => updateQuantity(i, item.quantity - 1)}>
                         <Minus size={14} />
                       </button>
                       <span style={styles.qty}>{item.quantity}</span>
-                      <button style={styles.qtyBtn} onClick={() => updateQuantity(i, item.quantity + 1)}>
+                      <button aria-label={`Increase ${item.title} quantity`} style={styles.qtyBtn} onClick={() => updateQuantity(i, item.quantity + 1)}>
                         <Plus size={14} />
                       </button>
                     </div>
                     <p style={{ fontWeight: 700, fontSize: 16 }}>
                       ${((item.price * item.quantity) / 100).toFixed(2)}
                     </p>
-                    <button onClick={() => removeItem(i)} style={styles.removeBtn}>
+                    <button aria-label={`Remove ${item.title}`} onClick={() => removeItem(i)} style={styles.removeBtn}>
                       <Trash2 size={16} />
                     </button>
                   </div>
@@ -92,7 +92,7 @@ export default function Cart() {
               ))}
             </div>
 
-            <div style={styles.summary}>
+            <div className="cart-page-summary" style={styles.summary}>
               <div style={styles.summaryRow}>
                 <span>Subtotal ({items.reduce((s, i) => s + i.quantity, 0)} items)</span>
                 <span style={{ fontSize: 22, fontWeight: 700 }}>${(totalPrice / 100).toFixed(2)}</span>
@@ -114,6 +114,44 @@ export default function Cart() {
           </>
         )}
       </div>
+
+      <style>{`
+        @media (max-width: 640px) {
+          .cart-page { padding-top: 28px; }
+          .cart-page-items { margin-bottom: 22px !important; }
+          .cart-page-item {
+            display: grid !important;
+            grid-template-columns: 88px minmax(0, 1fr) !important;
+            align-items: start !important;
+            gap: 14px !important;
+            padding: 16px 0 !important;
+          }
+          .cart-page-item-img { width: 88px !important; height: 104px !important; }
+          .cart-page-item-info { min-width: 0; }
+          .cart-page-item-info > a { display: block; font-size: 16px !important; line-height: 1.3; }
+          .cart-page-item-actions {
+            grid-column: 1 / -1;
+            width: 100%;
+            justify-content: space-between;
+            gap: 12px !important;
+          }
+          .cart-page-qty button {
+            width: 42px;
+            height: 42px;
+            align-items: center;
+            justify-content: center;
+            padding: 0 !important;
+          }
+          .cart-page-item-actions > button {
+            width: 44px;
+            height: 44px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+          }
+          .cart-page-summary { padding: 20px 16px !important; border-radius: 10px !important; }
+        }
+      `}</style>
     </div>
   );
 }

@@ -219,6 +219,36 @@ export default function ProductCard({ product }) {
           text-transform: uppercase;
           font-weight: 500;
         }
+        @media (max-width: 520px) {
+          .tt-product-info { padding: 12px 12px 14px; }
+          .tt-product-row {
+            display: block;
+            margin-bottom: 9px;
+          }
+          .tt-product-title {
+            display: -webkit-box;
+            min-height: 34px;
+            overflow: hidden;
+            font-size: 13px;
+            line-height: 1.3;
+            white-space: normal;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+          }
+          .tt-product-price {
+            margin-top: 5px;
+            font-size: 14px;
+          }
+          .tt-product-featured {
+            top: 8px;
+            left: 8px;
+            padding: 4px 7px;
+            font-size: 9px;
+          }
+          .tt-product-quickview { display: none; }
+          .tt-color-dots { gap: 4px; }
+          .tt-color-dot { width: 12px; height: 12px; }
+        }
       `}</style>
     </Link>
   );

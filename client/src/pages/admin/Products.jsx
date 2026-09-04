@@ -66,8 +66,8 @@ export default function AdminProducts() {
         </Link>
       }
     >
-        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-          <div className="table-wrap">
+        <div className="card admin-products-card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div className="table-wrap admin-mobile-table admin-products-table">
             <table>
               <thead>
                 <tr>
@@ -95,7 +95,7 @@ export default function AdminProducts() {
                 ) : (
                   products.map((p) => (
                     <tr key={p._id}>
-                      <td>
+                      <td className="admin-product-image-cell">
                         {p.imageUrls?.[0] ? (
                           <img
                             src={p.imageUrls[0]}
@@ -125,7 +125,7 @@ export default function AdminProducts() {
                           </div>
                         )}
                       </td>
-                      <td>
+                      <td data-label="Product" className="admin-product-info-cell">
                         <Link
                           to={`/admin/products/${p._id}`}
                           style={{ fontWeight: 600, color: 'var(--text)' }}
@@ -137,23 +137,23 @@ export default function AdminProducts() {
                         )}
                         <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
                           {p.editorType === '2d' ? '2D editor' : '3D editor'}
-                          {p.shirtStyle && ` · ${p.shirtStyle === 'womens' ? "Women's" : "Men's"}`}
+                          {p.shirtStyle && ' · Unisex'}
                         </div>
                       </td>
-                      <td style={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
+                      <td data-label="Price" style={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
                         ${(p.price / 100).toFixed(2)}
                       </td>
-                      <td>
+                      <td data-label="Status">
                         <span className={`badge ${p.active ? 'badge-success' : 'badge-gray'}`}>
                           {p.active ? 'Active' : 'Hidden'}
                         </span>
                       </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                          <Link to={`/admin/products/${p._id}`} className="btn btn-secondary btn-sm" title="Edit">
+                      <td data-label="Actions" className="admin-actions-cell">
+                        <div className="admin-row-actions" style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                          <Link to={`/admin/products/${p._id}`} className="btn btn-secondary btn-sm" title="Edit" aria-label={`Edit ${p.title}`}>
                             <Edit size={14} />
                           </Link>
-                          <button className="btn btn-secondary btn-sm" onClick={() => toggleActive(p)} title={p.active ? 'Hide' : 'Show'}>
+                          <button className="btn btn-secondary btn-sm" onClick={() => toggleActive(p)} title={p.active ? 'Hide' : 'Show'} aria-label={`${p.active ? 'Hide' : 'Show'} ${p.title}`}>
                             {p.active ? <EyeOff size={14} /> : <Eye size={14} />}
                           </button>
                           <button
@@ -161,6 +161,7 @@ export default function AdminProducts() {
                             onClick={() => setDeleteTarget({ id: p._id, title: p.title })}
                             style={{ color: 'var(--danger)' }}
                             title="Delete"
+                            aria-label={`Delete ${p.title}`}
                           >
                             <Trash2 size={14} />
                           </button>

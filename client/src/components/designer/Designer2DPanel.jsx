@@ -20,11 +20,11 @@ import {
   Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight,
   Layers, CopyPlus, FlipHorizontal2, FlipVertical2,
   ArrowUpToLine, ArrowDownToLine, Sparkles, CircleDot,
-  Sticker, Shapes,
+  Sticker,
 } from 'lucide-react';
 import FabricCanvas from './FabricCanvas';
-import { dataURLToBlob } from './designerHelpers';
-import { getMockupUrl, getWomensMockupUrl } from './designerMockups';
+import { dataURLToBlob, loadFabricAssetImage, loadFabricImageFromFile } from './designerHelpers';
+import { getMockupUrl } from './designerMockups';
 import {
   CANVAS_CONFIG, TSHIRT_FRONT_PATH, TSHIRT_BACK_PATH, TSHIRT_COLORS,
   DEFAULT_TEXT_CONFIG, FONT_OPTIONS, FONT_CATEGORIES,
@@ -349,8 +349,7 @@ function renderCurvedText({ text, font, fontSize, fill, curve, strokeColor, stro
    ═══════════════════════════════════════════════════════════════ */
 const TOOL_TABS = [
   { id: 'text', label: 'Text', Icon: Type },
-  { id: 'shapes', label: 'Shapes', Icon: Shapes },
-  { id: 'clipart', label: 'Clip Art', Icon: Sticker },
+  { id: 'clipart', label: 'Assets', Icon: Sticker },
   { id: 'image', label: 'Image', Icon: ImagePlus },
   { id: 'effects', label: 'Effects', Icon: Sparkles },
 ];
@@ -365,12 +364,6 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
   const [selectedObject, setSelectedObject] = useState(null);
   const [capturing2D, setCapturing2D] = useState(false);
   const [activeToolTab, setActiveToolTab] = useState(null);
-  // Truekin is unisex-only. Studio always uses the "mens" base (relabeled Unisex in UI).
-  const [shirtStyle, setShirtStyle] = useState('mens');
-  // eslint-disable-next-line no-unused-vars
-  const _setShirtStyleUnused = setShirtStyle;
-  const [womensFrontMockup, setWomensFrontMockup] = useState(null);
-  const [womensBackMockup, setWomensBackMockup] = useState(null);
 
   // --- Text editing ---
   const [editText, setEditText] = useState('');
@@ -391,7 +384,7 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
   const [editShadowOffsetY, setEditShadowOffsetY] = useState(2);
 
   // --- Shape editing ---
-  const [shapeFill, setShapeFill] = useState('#3b82f6');
+  const [shapeFill, setShapeFill] = useState('#0a0a0a');
   const [shapeStroke, setShapeStroke] = useState('');
   const [shapeStrokeWidth, setShapeStrokeWidth] = useState(0);
   const [objectOpacity, setObjectOpacity] = useState(100);
@@ -406,7 +399,7 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
   const [curveStrokeWidth, setCurveStrokeWidth] = useState(0);
 
   // --- Clip art filter ---
-  const [clipCategory, setClipCategory] = useState('Popular');
+  const [clipCategory, setClipCategory] = useState(CLIPART_CATEGORIES[0]?.name || 'Studio Picks');
   const [fontFilter, setFontFilter] = useState('all');
 
   // --- 2D preview thumbnails ---
@@ -417,19 +410,6 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
   const frontCanvasRef = useRef(null);
   const backCanvasRef = useRef(null);
   const fileInputRef = useRef(null);
-
-  // --- Generate women's mockup URLs when color or style changes ---
-  useEffect(() => {
-    if (shirtStyle !== 'womens') return;
-    let cancelled = false;
-    getWomensMockupUrl(tshirtColor, 'front').then((url) => {
-      if (!cancelled) setWomensFrontMockup(url);
-    });
-    getWomensMockupUrl(tshirtColor, 'back').then((url) => {
-      if (!cancelled) setWomensBackMockup(url);
-    });
-    return () => { cancelled = true; };
-  }, [tshirtColor, shirtStyle]);
 
   // --- Load saved design ---
   useEffect(() => {
@@ -460,11 +440,10 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
   }, [updatePreview]);
 
   useEffect(() => {
-    // Delay enough for mockup image to load (women's recolor is async)
-    const delay = shirtStyle === 'womens' ? 800 : 600;
-    const timer = setTimeout(() => { updatePreview('front'); updatePreview('back'); }, delay);
+    // Delay enough for the mockup image to decode before we snapshot it
+    const timer = setTimeout(() => { updatePreview('front'); updatePreview('back'); }, 600);
     return () => clearTimeout(timer);
-  }, [tshirtColor, shirtStyle, updatePreview]);
+  }, [tshirtColor, updatePreview]);
 
   // --- Track selection count for group selections ---
   const [selectionCount, setSelectionCount] = useState(0);
@@ -539,31 +518,27 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
     setTimeout(() => handleDesignChange(selectedView), 200);
   };
 
-  const handleAddImage = (e) => {
+  const handleAddImage = async (e) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const imgEl = new Image();
-      imgEl.src = ev.target.result;
-      imgEl.onload = () => {
-        const img = new fabric.Image(imgEl);
-        const maxW = CANVAS_CONFIG.width * 0.5;
-        const maxH = CANVAS_CONFIG.height * 0.5;
-        if (img.width > maxW || img.height > maxH) {
-          img.scale(Math.min(maxW / img.width, maxH / img.height));
-        }
-        const canvas = activeCanvasRef.current?.getCanvas();
-        if (!canvas) return;
-        img.set({
-          left: (canvas.width - img.getScaledWidth()) / 2,
-          top: (canvas.height - img.getScaledHeight()) / 2,
-        });
-        addToCanvas(img);
-      };
-    };
-    reader.readAsDataURL(file);
     e.target.value = '';
+    if (!file) return;
+    try {
+      const img = await loadFabricImageFromFile(fabric, file);
+      const maxW = CANVAS_CONFIG.width * 0.5;
+      const maxH = CANVAS_CONFIG.height * 0.5;
+      if (img.width > maxW || img.height > maxH) {
+        img.scale(Math.min(maxW / img.width, maxH / img.height));
+      }
+      const canvas = activeCanvasRef.current?.getCanvas();
+      if (!canvas) return;
+      img.set({
+        left: (canvas.width - img.getScaledWidth()) / 2,
+        top: (canvas.height - img.getScaledHeight()) / 2,
+      });
+      addToCanvas(img);
+    } catch (error) {
+      console.warn(error);
+    }
   };
 
   const handleAddText = (preset) => {
@@ -604,13 +579,48 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
   };
 
   const handleAddShape = (shapeDef) => {
+    const canvas = activeCanvasRef.current?.getCanvas();
+    if (!canvas) return;
     const obj = shapeDef.create(fabric);
+    obj.set({
+      fill: shapeFill,
+      originX: 'center',
+      originY: 'center',
+      left: canvas.width / 2,
+      top: canvas.height / 2,
+    });
     addToCanvas(obj);
   };
 
-  const handleAddClipart = (item) => {
+  const handleAddClipart = async (item) => {
     const canvas = activeCanvasRef.current?.getCanvas();
     if (!canvas) return;
+
+    if (item.shapeId) {
+      const shape = SHAPE_DEFS.find((definition) => definition.id === item.shapeId);
+      if (shape) handleAddShape(shape);
+      return;
+    }
+
+    if (item.src) {
+      try {
+        const image = await loadFabricAssetImage(fabric, item.src);
+        const maxW = CANVAS_CONFIG.width * 0.58;
+        const maxH = CANVAS_CONFIG.height * 0.58;
+        if (image.width > maxW || image.height > maxH) {
+          image.scale(Math.min(maxW / image.width, maxH / image.height));
+        }
+        image.set({
+          left: (canvas.width - image.getScaledWidth()) / 2,
+          top: (canvas.height - image.getScaledHeight()) / 2,
+        });
+        addToCanvas(image);
+      } catch (error) {
+        console.warn(error);
+      }
+      return;
+    }
+
     const path = new fabric.Path(item.path, {
       fill: item.fill || '#000',
       stroke: item.stroke || '',
@@ -861,12 +871,12 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
 
   // --- Save/Export ---
   const getDesignState = useCallback(() => ({
-    tshirtColor, editorType: '2d', shirtStyle,
+    tshirtColor, editorType: '2d', shirtStyle: 'unisex',
     frontObjects: frontCanvasRef.current?.getObjects() || [],
     backObjects: backCanvasRef.current?.getObjects() || [],
     frontTexture: frontCanvasRef.current?.getTextureDataURL() || null,
     backTexture: backCanvasRef.current?.getTextureDataURL() || null,
-  }), [tshirtColor, shirtStyle]);
+  }), [tshirtColor]);
 
   const handleCapture2D = () => {
     setCapturing2D(true);
@@ -984,20 +994,6 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
     </div>
   );
 
-  const renderShapesPanel = () => (
-    <div style={s.toolContent}>
-      <p style={s.toolSubhead}>Click a shape to add it to canvas</p>
-      <div style={s.shapeGrid}>
-        {SHAPE_DEFS.map((shape) => (
-          <button key={shape.id} type="button" onClick={() => handleAddShape(shape)} style={s.shapeBtn} title={shape.label}>
-            <span style={{ fontSize: 24, lineHeight: 1 }}>{shape.icon}</span>
-            <span style={{ fontSize: 10, color: '#666' }}>{shape.label}</span>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-
   const renderClipartPanel = () => {
     const activeCat = CLIPART_CATEGORIES.find((c) => c.name === clipCategory) || CLIPART_CATEGORIES[0];
     return (
@@ -1018,20 +1014,41 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
             </button>
           ))}
         </div>
+        {activeCat.name === 'Shapes' && (
+          <div style={s.assetOptions}>
+            <label style={s.assetOptionLabel}>
+              Shape color
+              <input type="color" value={shapeFill} onChange={(event) => setShapeFill(event.target.value)} style={s.colorInput} />
+            </label>
+            <span style={s.assetOptionHint}>Shapes stay editable after you add them.</span>
+          </div>
+        )}
         <div style={s.clipGrid}>
-          {activeCat.items.map((item, i) => (
-            <button key={i} type="button" onClick={() => handleAddClipart(item)} style={s.clipBtn} title={item.label}>
-              <svg viewBox={item.viewBox} style={{ width: 40, height: 40 }}>
-                <path
-                  d={item.path}
-                  fill={item.fill || 'none'}
-                  stroke={item.stroke || 'none'}
-                  strokeWidth={item.strokeWidth || 0}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              <span style={{ fontSize: 9, color: '#666' }}>{item.label}</span>
+          {activeCat.items.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              onClick={() => handleAddClipart(item)}
+              style={{ ...s.clipBtn, background: item.previewBackground || '#fff' }}
+              title={`Add ${item.label}`}
+            >
+              {item.shapeId ? (
+                <span style={{ fontSize: 30, lineHeight: 1, color: shapeFill }}>{item.icon}</span>
+              ) : item.src ? (
+                <img src={item.thumbnail || item.src} alt="" style={s.assetThumb} />
+              ) : (
+                <svg viewBox={item.viewBox} style={{ width: 40, height: 40 }}>
+                  <path
+                    d={item.path}
+                    fill={item.fill || 'none'}
+                    stroke={item.stroke || 'none'}
+                    strokeWidth={item.strokeWidth || 0}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              )}
+              <span style={{ fontSize: 9, color: item.previewBackground ? '#f4f1ea' : '#666' }}>{item.label}</span>
             </button>
           ))}
         </div>
@@ -1512,7 +1529,6 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
         {activeToolTab && (
           <div style={s.toolPanel}>
             {activeToolTab === 'text' && renderTextPanel()}
-            {activeToolTab === 'shapes' && renderShapesPanel()}
             {activeToolTab === 'clipart' && renderClipartPanel()}
             {activeToolTab === 'image' && renderImagePanel()}
             {activeToolTab === 'effects' && renderEffectsPanel()}
@@ -1524,15 +1540,13 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
           <div style={s.fabricContainer}>
             <div style={{ display: selectedView === 'front' ? 'block' : 'none' }}>
               <FabricCanvas ref={frontCanvasRef} svgPath={TSHIRT_FRONT_PATH} tshirtColor={tshirtColor} view="front"
-                mockupUrl={shirtStyle === 'womens' ? womensFrontMockup : getMockupUrl(tshirtColor, 'front')} preColored={true}
-                shirtStyle={shirtStyle}
+                mockupUrl={getMockupUrl(tshirtColor, 'front')} preColored={true}
                 onObjectSelect={selectedView === 'front' ? handleObjectSelect : undefined}
                 onDesignChange={handleDesignChange} />
             </div>
             <div style={{ display: selectedView === 'back' ? 'block' : 'none' }}>
               <FabricCanvas ref={backCanvasRef} svgPath={TSHIRT_BACK_PATH} tshirtColor={tshirtColor} view="back"
-                mockupUrl={shirtStyle === 'womens' ? womensBackMockup : getMockupUrl(tshirtColor, 'back')} preColored={true}
-                shirtStyle={shirtStyle}
+                mockupUrl={getMockupUrl(tshirtColor, 'back')} preColored={true}
                 onObjectSelect={selectedView === 'back' ? handleObjectSelect : undefined}
                 onDesignChange={handleDesignChange} />
             </div>
@@ -1699,6 +1713,13 @@ const s = {
     padding: '8px 4px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff',
     cursor: 'pointer', gap: 2, transition: 'all 0.15s',
   },
+  assetThumb: { width: 48, height: 48, objectFit: 'contain', display: 'block' },
+  assetOptions: {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+    padding: '8px 10px', marginBottom: 10, borderRadius: 8, background: '#f3f4f6',
+  },
+  assetOptionLabel: { display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 11, fontWeight: 600, color: '#374151' },
+  assetOptionHint: { fontSize: 10, color: '#6b7280' },
 
   // Image upload
   uploadArea: {

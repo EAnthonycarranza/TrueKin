@@ -77,7 +77,7 @@ export default function Checkout() {
           quantity: item.quantity,
           color: item.color || null,
           size: item.size || null,
-          shirtStyle: item.shirtStyle || 'mens',
+          shirtStyle: item.shirtStyle || 'unisex',
         })),
         shippingAddress: {
           name: form.name,
@@ -115,16 +115,16 @@ export default function Checkout() {
   }
 
   return (
-    <div className="page">
-      <div className="container" style={{ maxWidth: 900 }}>
+    <div className="page checkout-page">
+      <div className="container checkout-container" style={{ maxWidth: 900 }}>
         <div className="page-header">
           <h1>Checkout</h1>
         </div>
 
-        <div style={styles.layout}>
+        <div className="checkout-layout" style={styles.layout}>
           {/* Form */}
-          <div>
-            <div className="card" style={{ marginBottom: 24 }}>
+          <div className="checkout-form-column">
+            <div className="card checkout-card" style={{ marginBottom: 24 }}>
               <h3 style={styles.sectionTitle}>
                 <Truck size={18} /> Shipping Address
               </h3>
@@ -132,32 +132,32 @@ export default function Checkout() {
               {!user && (
                 <div className="form-group">
                   <label>Email</label>
-                  <input className="input" name="email" value={form.email} onChange={handleChange} placeholder="your@email.com" />
+                  <input className="input" type="email" autoComplete="email" name="email" value={form.email} onChange={handleChange} placeholder="your@email.com" />
                 </div>
               )}
 
               <div className="form-group">
                 <label>Full Name</label>
-                <input className="input" name="name" value={form.name} onChange={handleChange} placeholder="John Doe" />
+                <input className="input" autoComplete="name" name="name" value={form.name} onChange={handleChange} placeholder="John Doe" />
               </div>
 
               <div className="form-group">
                 <label>Street Address</label>
-                <input className="input" name="street" value={form.street} onChange={handleChange} placeholder="123 Main St" />
+                <input className="input" autoComplete="address-line1" name="street" value={form.street} onChange={handleChange} placeholder="123 Main St" />
               </div>
 
-              <div style={styles.row}>
+              <div className="checkout-address-row" style={styles.row}>
                 <div className="form-group" style={{ flex: 1 }}>
                   <label>City</label>
-                  <input className="input" name="city" value={form.city} onChange={handleChange} placeholder="City" />
+                  <input className="input" autoComplete="address-level2" name="city" value={form.city} onChange={handleChange} placeholder="City" />
                 </div>
                 <div className="form-group" style={{ width: 100 }}>
                   <label>State</label>
-                  <input className="input" name="state" value={form.state} onChange={handleChange} placeholder="CA" />
+                  <input className="input" autoComplete="address-level1" maxLength={2} name="state" value={form.state} onChange={handleChange} placeholder="CA" />
                 </div>
                 <div className="form-group" style={{ width: 120 }}>
                   <label>ZIP Code</label>
-                  <input className="input" name="zip" value={form.zip} onChange={handleChange} placeholder="94105" />
+                  <input className="input" autoComplete="postal-code" inputMode="numeric" name="zip" value={form.zip} onChange={handleChange} placeholder="94105" />
                 </div>
               </div>
 
@@ -168,7 +168,7 @@ export default function Checkout() {
 
             {/* Shipping Rates */}
             {rates.length > 0 && (
-              <div className="card" style={{ marginBottom: 24 }}>
+              <div className="card checkout-card" style={{ marginBottom: 24 }}>
                 <h3 style={styles.sectionTitle}>Shipping Options</h3>
                 {rates.map((rate, i) => (
                   <label key={i} style={{
@@ -195,16 +195,16 @@ export default function Checkout() {
           </div>
 
           {/* Order Summary */}
-          <div>
-            <div className="card" style={{ position: 'sticky', top: 96 }}>
+          <div className="checkout-summary-column">
+            <div className="card checkout-card checkout-summary" style={{ position: 'sticky', top: 96 }}>
               <h3 style={styles.sectionTitle}>Order Summary</h3>
               {items.map((item, i) => (
-                <div key={i} style={styles.summaryItem}>
+                <div key={i} className="checkout-summary-item" style={styles.summaryItem}>
                   <div>
                     <p style={{ fontSize: 14, fontWeight: 500 }}>{item.title}</p>
                     <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                       Qty: {item.quantity}
-                      {item.shirtStyle && <> · {item.shirtStyle === 'womens' ? "Women's" : "Men's"}</>}
+                      {item.shirtStyle && <> · Unisex</>}
                       {item.size && <> · Size: {item.size}</>}
                       {item.color && (
                         <>
@@ -266,6 +266,35 @@ export default function Checkout() {
           </div>
         </div>
       </div>
+
+      <style>{`
+        @media (max-width: 820px) {
+          .checkout-layout {
+            grid-template-columns: minmax(0, 1fr) !important;
+            gap: 12px !important;
+          }
+          .checkout-layout > * { min-width: 0; }
+          .checkout-summary { position: static !important; }
+        }
+
+        @media (max-width: 640px) {
+          .checkout-page { padding-top: 28px; }
+          .checkout-card { padding: 18px 16px; border-radius: 10px; }
+          .checkout-address-row {
+            display: grid !important;
+            grid-template-columns: minmax(0, 1fr) minmax(82px, 0.55fr) !important;
+            gap: 0 10px !important;
+          }
+          .checkout-address-row > .form-group:first-child { grid-column: 1 / -1; }
+          .checkout-address-row > .form-group {
+            width: auto !important;
+            min-width: 0;
+          }
+          .checkout-form-column > .checkout-card { margin-bottom: 14px !important; }
+          .checkout-form-column .btn { width: 100%; }
+          .checkout-summary-item { gap: 12px; }
+        }
+      `}</style>
     </div>
   );
 }

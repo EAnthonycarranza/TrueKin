@@ -23,6 +23,7 @@ const COLOR_NAMES = {
 
 const DesignerPanel = lazy(() => import('../../components/designer/DesignerPanel'));
 const Designer2DPanel = lazy(() => import('../../components/designer/Designer2DPanel'));
+const Shirt3DStudio = lazy(() => import('../../components/shirt3d/Shirt3DStudio'));
 
 export default function AdminProductEdit() {
   const { id } = useParams();
@@ -48,6 +49,7 @@ export default function AdminProductEdit() {
   const [savingDesign, setSavingDesign] = useState(false);
   const [showDesigner, setShowDesigner] = useState(false);
   const [designData, setDesignData] = useState(null);
+  const [legacy3D, setLegacy3D] = useState(false);
 
   useEffect(() => {
     if (isEditing) {
@@ -573,7 +575,7 @@ export default function AdminProductEdit() {
                 <div className="tk-editor-info">
                   <span className="tk-editor-name">3D Press Studio</span>
                   <span className="tk-editor-desc">
-                    Fabric canvas + live 3D mockup. Customers rotate the tee on the product page.
+                    Colour-matched 3D: the tee is shaded from the same mockup photo as the 2D canvas, and prints land in the same spot. Customers rotate it on the product page.
                   </span>
                 </div>
                 {editorType === '3d' && <span className="tk-editor-badge">Selected</span>}
@@ -640,13 +642,30 @@ export default function AdminProductEdit() {
                       <p>Loading 3D studio…</p>
                     </div>
                   }>
-                    <DesignerPanel
-                      designData={designData}
-                      onSave={handleSaveDesign}
-                      onSnapshot={handleSnapshot}
-                      saving={savingDesign}
-                      shirtStyle={'unisex'}
-                    />
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => setLegacy3D((v) => !v)}
+                      >
+                        {legacy3D ? 'Use colour-matched 3D studio' : 'Use legacy 3D press'}
+                      </button>
+                    </div>
+                    {legacy3D ? (
+                      <DesignerPanel
+                        designData={designData}
+                        onSave={handleSaveDesign}
+                        onSnapshot={handleSnapshot}
+                        saving={savingDesign}
+                      />
+                    ) : (
+                      <Shirt3DStudio
+                        designData={designData}
+                        onSave={handleSaveDesign}
+                        onSnapshot={handleSnapshot}
+                        saving={savingDesign}
+                      />
+                    )}
                   </Suspense>
                 ) : (
                   <Suspense fallback={
@@ -1738,6 +1757,198 @@ export default function AdminProductEdit() {
           .tk-submit-bar { flex-direction: column; align-items: stretch; gap: 14px; }
           .tk-submit-actions { justify-content: stretch; }
           .tk-submit-actions button { flex: 1; justify-content: center; }
+        }
+
+        @media (max-width: 600px) {
+          .tk-pe { width: 100%; }
+          .tk-pe-back {
+            min-height: 42px;
+            margin-bottom: 14px;
+          }
+          .tk-pe-hero {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 14px;
+            padding: 20px 18px;
+            margin-bottom: 16px;
+          }
+          .tk-pe-hero-mark { display: none; }
+          .tk-pe-hero-text { min-width: 0; }
+          .tk-pe-title {
+            max-width: 8ch;
+            font-size: 38px;
+            line-height: 0.94;
+          }
+          .tk-pe-sub {
+            max-width: none;
+            font-size: 13px;
+          }
+          .tk-pe-hero-seal {
+            justify-self: start;
+            min-height: 42px;
+          }
+          .tk-pe-form { gap: 14px; }
+          .tk-pe-card {
+            padding: 18px 16px;
+            border-radius: 8px;
+          }
+          .tk-section-head {
+            align-items: flex-start;
+            gap: 11px;
+            margin-bottom: 18px;
+            padding-bottom: 14px;
+          }
+          .tk-section-num { font-size: 28px; }
+          .tk-section-title { font-size: 13px; }
+          .tk-section-sub {
+            margin-top: 4px;
+            font-size: 11.5px;
+            line-height: 1.4;
+          }
+          .tk-pe-grid-2 {
+            gap: 0;
+            margin-bottom: 0;
+          }
+          .tk-field { margin-bottom: 14px; }
+          .tk-input {
+            min-height: 48px;
+            font-size: 16px;
+          }
+          textarea.tk-input { font-size: 16px; }
+          .tk-toggles {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 9px;
+          }
+          .tk-toggle {
+            min-width: 0;
+            min-height: 58px;
+            padding: 11px 13px;
+          }
+          .tk-colors { gap: 10px; }
+          .tk-color {
+            width: 46px;
+            height: 46px;
+          }
+          .tk-color-name { display: none; }
+          .tk-chips-row {
+            gap: 7px;
+            padding: 10px;
+          }
+          .tk-unisex-banner {
+            grid-template-columns: auto minmax(0, 1fr);
+            padding: 16px;
+          }
+          .tk-unisex-banner-stat {
+            min-width: 0;
+            padding: 9px 0 0;
+            border-top: 1px solid rgba(244,241,234,0.14);
+          }
+          .tk-size-pills {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+          }
+          .tk-size-pill {
+            min-width: 0;
+            min-height: 46px;
+            padding: 9px 6px;
+          }
+          .tk-empty-row {
+            align-items: flex-start;
+            flex-wrap: wrap;
+            padding: 16px;
+          }
+          .tk-empty-row p { min-width: calc(100% - 34px); }
+          .tk-empty-row .tk-btn-outline {
+            width: 100%;
+            justify-content: center;
+          }
+          .tk-inv-row {
+            grid-template-columns: 52px minmax(0, 1fr);
+            padding: 14px;
+          }
+          .tk-inv-row .tk-input-sm { min-height: 44px; }
+          .tk-inv-unlimited { min-height: 40px; }
+          .tk-inv-unlimited input {
+            width: 20px;
+            height: 20px;
+          }
+          .tk-inv-actions {
+            justify-content: space-between;
+            gap: 10px;
+            padding: 14px;
+          }
+          .tk-link,
+          .tk-link-danger { min-height: 40px; }
+          .tk-editor-card {
+            min-height: 108px;
+            gap: 12px;
+            padding: 15px;
+          }
+          .tk-editor-icon {
+            width: 42px;
+            height: 42px;
+          }
+          .tk-editor-badge {
+            position: static;
+            align-self: flex-start;
+          }
+          .tk-designer-head {
+            align-items: stretch;
+            flex-direction: column;
+            gap: 12px;
+          }
+          .tk-designer-head-right {
+            width: 100%;
+            justify-content: space-between;
+          }
+          .tk-designer-head-right .btn { min-height: 42px; }
+          .tk-designer-body {
+            min-width: 0;
+            margin-top: 16px;
+            padding-top: 16px;
+          }
+          .tk-callout { align-items: flex-start; }
+          .tk-upload {
+            min-height: 132px;
+            padding: 22px 14px;
+            text-align: center;
+          }
+          .tk-shots-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .tk-shot-remove {
+            width: 36px;
+            height: 36px;
+          }
+          .tk-submit-bar {
+            bottom: max(8px, env(safe-area-inset-bottom));
+            gap: 10px;
+            padding: 14px;
+            border-radius: 8px;
+          }
+          .tk-submit-summary { gap: 10px; }
+          .tk-submit-label { font-size: 19px; }
+          .tk-submit-meta { font-size: 9.5px; }
+          .tk-submit-actions { gap: 8px; }
+          .tk-submit-actions button {
+            min-height: 46px;
+            padding-inline: 12px;
+          }
+          .tk-modal {
+            max-height: calc(100dvh - 32px);
+            overflow-y: auto;
+            padding: 24px 20px;
+          }
+          .tk-modal-actions {
+            display: grid;
+            grid-template-columns: 1fr;
+          }
+          .tk-modal-actions button {
+            width: 100%;
+            min-height: 46px;
+            justify-content: center;
+          }
         }
 
         /* Modal */

@@ -14,25 +14,25 @@ const navItems = [
 export default function AdminLayout({ children, title, description, action }) {
   return (
     <div className="admin-shell">
-      <aside className="admin-sidebar">
-        <div style={{ padding: '0 12px 12px' }}>
+      <aside className="admin-sidebar" aria-label="Admin navigation">
+        <div className="admin-brand" style={{ padding: '0 12px 12px' }}>
           <div style={{
             display: 'flex',
             alignItems: 'center',
             gap: 12,
             padding: '6px 0 24px',
           }}>
-            <div style={{ color: '#fff' }}>
-              <ShieldMark size={34} />
+            <div style={{ color: '#f4f1ea', lineHeight: 0 }}>
+              <ShieldMark size={40} cutoutColor="#0a0a0a" />
             </div>
             <div>
-              <div style={{ color: '#fff', marginBottom: 2 }}>
-                <Wordmark height={15} />
+              <div style={{ color: '#f4f1ea', marginBottom: 5 }}>
+                <Wordmark height={18} />
               </div>
               <p style={{
                 fontFamily: 'var(--font-secondary)',
                 fontSize: 10,
-                color: '#6d6a5e',
+                color: '#bcb7aa',
                 letterSpacing: '0.24em',
                 textTransform: 'uppercase',
                 fontWeight: 600,
@@ -42,34 +42,38 @@ export default function AdminLayout({ children, title, description, action }) {
         </div>
 
         <h4>Operations</h4>
-        {navItems.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.exact}
-            className={({ isActive }) =>
-              `admin-nav-link ${isActive ? 'active' : ''}`
-            }
-          >
-            <item.icon size={17} />
-            <span>{item.label}</span>
-          </NavLink>
-        ))}
+        <nav className="admin-nav-primary">
+          {navItems.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.exact}
+              className={({ isActive }) =>
+                `admin-nav-link ${isActive ? 'active' : ''}`
+              }
+            >
+              <item.icon size={17} />
+              <span>{item.label}</span>
+            </NavLink>
+          ))}
+        </nav>
 
-        <h4>Account</h4>
-        <NavLink to="/" className="admin-nav-link">
-          <ArrowUpRight size={17} />
-          <span>View Store</span>
-        </NavLink>
-        <NavLink to="#" className="admin-nav-link" onClick={(e) => e.preventDefault()}>
-          <Settings size={17} />
-          <span>Settings</span>
-        </NavLink>
+        <div className="admin-nav-secondary">
+          <h4>Account</h4>
+          <NavLink to="/" className="admin-nav-link">
+            <ArrowUpRight size={17} />
+            <span>View Store</span>
+          </NavLink>
+          <NavLink to="#" className="admin-nav-link" onClick={(e) => e.preventDefault()}>
+            <Settings size={17} />
+            <span>Settings</span>
+          </NavLink>
+        </div>
       </aside>
 
       <main className="admin-main">
         {(title || action) && (
-          <header style={{
+          <header className="admin-page-header" style={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'flex-end',
@@ -79,7 +83,7 @@ export default function AdminLayout({ children, title, description, action }) {
             paddingBottom: 24,
             borderBottom: '1.5px solid var(--ink)',
           }}>
-            <div>
+            <div className="admin-page-heading">
               {title && (
                 <h1 style={{
                   fontFamily: 'var(--font-display)',
@@ -105,7 +109,7 @@ export default function AdminLayout({ children, title, description, action }) {
                 </p>
               )}
             </div>
-            {action}
+            {action && <div className="admin-page-action">{action}</div>}
           </header>
         )}
         <div className="fade-in">{children}</div>

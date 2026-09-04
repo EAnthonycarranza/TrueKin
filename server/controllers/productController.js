@@ -1,7 +1,27 @@
 const Product = require('../models/Product');
 const sharp = require('sharp');
-const path = require('path');
-const fs = require('fs');
+const storage = require('../utils/storage');
+
+/**
+ * Resize + re-encode an uploaded image, then hand the buffer to the storage
+ * layer (Cloudflare R2, or local disk when R2 is not configured).
+ *
+ * Multer buffers uploads in memory, so there is no temp file to clean up.
+ *
+ * @returns {Promise<string>} the URL to persist on the product
+ */
+async function storeOptimizedImage(file) {
+  const isPng = file.mimetype === 'image/png';
+  const ext = isPng ? '.png' : '.jpg';
+  const name = `opt-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+
+  let pipeline = sharp(file.buffer)
+    .resize(1200, 1200, { fit: 'inside', withoutEnlargement: true });
+  pipeline = isPng ? pipeline.png({ quality: 95 }) : pipeline.jpeg({ quality: 90 });
+
+  const buffer = await pipeline.toBuffer();
+  return storage.saveImage(name, buffer, isPng ? 'image/png' : 'image/jpeg');
+}
 
 // Public: Get all active products
 exports.getProducts = async (req, res) => {
@@ -49,27 +69,11 @@ exports.createProduct = async (req, res) => {
 
     if (req.files && req.files.length > 0) {
       for (const file of req.files) {
-        const isPng = file.mimetype === 'image/png';
-        const ext = isPng ? '.png' : '.jpg';
-        const optimizedName = 'opt-' + file.filename.replace(/\.[^.]+$/, ext);
-        const optimizedPath = path.join(__dirname, '../uploads', optimizedName);
-
-        let pipeline = sharp(file.path)
-          .resize(1200, 1200, { fit: 'inside', withoutEnlargement: true });
-
-        if (isPng) {
-          pipeline = pipeline.png({ quality: 95 });
-        } else {
-          pipeline = pipeline.jpeg({ quality: 90 });
-        }
-
-        await pipeline.toFile(optimizedPath);
-        fs.unlinkSync(file.path);
-        imageUrls.push(`/uploads/${optimizedName}`);
+        imageUrls.push(await storeOptimizedImage(file));
       }
     }
 
-    const { editorType, shirtStyle, availableColors, sizes } = req.body;
+    const { editorType, availableColors, sizes } = req.body;
     let colors = [];
     if (availableColors) {
       try { colors = JSON.parse(availableColors); } catch { colors = []; }
@@ -88,7 +92,8 @@ exports.createProduct = async (req, res) => {
         parsedSizes = Array.from(seen.values());
       } catch { parsedSizes = []; }
     }
-    const allowedStyles = ['unisex', 'mens', 'womens'];
+    // Truekin sells a single unisex cut — new products are never gendered.
+    // The schema still permits the legacy values so existing documents save.
     const product = await Product.create({
       title,
       description,
@@ -96,7 +101,7 @@ exports.createProduct = async (req, res) => {
       imageUrls,
       featured: featured === 'true' || featured === true,
       editorType: editorType === '2d' ? '2d' : '3d',
-      shirtStyle: allowedStyles.includes(shirtStyle) ? shirtStyle : 'unisex',
+      shirtStyle: 'unisex',
       availableColors: colors,
       sizes: parsedSizes,
     });
@@ -123,7 +128,7 @@ exports.updateProduct = async (req, res) => {
     if (featured !== undefined) product.featured = featured === 'true' || featured === true;
     if (active !== undefined) product.active = active === 'true' || active === true;
     if (req.body.editorType) product.editorType = req.body.editorType;
-    if (req.body.shirtStyle) product.shirtStyle = req.body.shirtStyle;
+    if (req.body.shirtStyle) product.shirtStyle = 'unisex';
     if (req.body.availableColors !== undefined) {
       try { product.availableColors = JSON.parse(req.body.availableColors); } catch { /* keep existing */ }
     }
@@ -145,23 +150,7 @@ exports.updateProduct = async (req, res) => {
     // Handle new images
     if (req.files && req.files.length > 0) {
       for (const file of req.files) {
-        const isPng = file.mimetype === 'image/png';
-        const ext = isPng ? '.png' : '.jpg';
-        const optimizedName = 'opt-' + file.filename.replace(/\.[^.]+$/, ext);
-        const optimizedPath = path.join(__dirname, '../uploads', optimizedName);
-
-        let pipeline = sharp(file.path)
-          .resize(1200, 1200, { fit: 'inside', withoutEnlargement: true });
-
-        if (isPng) {
-          pipeline = pipeline.png({ quality: 95 });
-        } else {
-          pipeline = pipeline.jpeg({ quality: 90 });
-        }
-
-        await pipeline.toFile(optimizedPath);
-        fs.unlinkSync(file.path);
-        product.imageUrls.push(`/uploads/${optimizedName}`);
+        product.imageUrls.push(await storeOptimizedImage(file));
       }
     }
 
@@ -185,11 +174,7 @@ exports.deleteProductImage = async (req, res) => {
     product.imageUrls = product.imageUrls.filter((url) => url !== imageUrl);
     await product.save();
 
-    // Delete file from disk
-    const filePath = path.join(__dirname, '..', imageUrl);
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    }
+    await storage.deleteImage(imageUrl);
 
     res.json({ product });
   } catch (error) {
@@ -207,10 +192,7 @@ exports.deleteProduct = async (req, res) => {
 
     // Clean up images
     for (const imageUrl of product.imageUrls) {
-      const filePath = path.join(__dirname, '..', imageUrl);
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-      }
+      await storage.deleteImage(imageUrl);
     }
 
     res.json({ message: 'Product deleted' });
@@ -227,30 +209,27 @@ exports.saveDesign = async (req, res) => {
       return res.status(404).json({ message: 'Product not found' });
     }
 
-    // Ensure designs directory exists
-    const designsDir = path.join(__dirname, '../uploads/designs');
-    if (!fs.existsSync(designsDir)) {
-      fs.mkdirSync(designsDir, { recursive: true });
-    }
-
     // Save the design image (canvas snapshot PNG)
     if (req.files && req.files.designImage && req.files.designImage[0]) {
       const imgFile = req.files.designImage[0];
-      const imgName = `design-${product._id}.png`;
-      const imgPath = path.join(__dirname, '../uploads', imgName);
+      // Timestamped rather than a fixed `design-<id>.png`: objects are served
+      // with a long immutable cache, so re-saving a design has to produce a
+      // new key or viewers keep seeing the previous artwork.
+      const imgName = `design-${product._id}-${Date.now()}.png`;
 
-      await sharp(imgFile.path)
+      const buffer = await sharp(imgFile.buffer)
         .resize(1200, 1200, { fit: 'inside', withoutEnlargement: true })
         .png({ quality: 95 })
-        .toFile(imgPath);
+        .toBuffer();
 
-      fs.unlinkSync(imgFile.path);
+      const imgUrl = await storage.saveImage(imgName, buffer, 'image/png');
 
       // Add/replace design image as first product image
-      const imgUrl = `/uploads/${imgName}`;
       const existingIdx = product.imageUrls.findIndex(url => url.includes(`design-${product._id}`));
       if (existingIdx >= 0) {
+        const stale = product.imageUrls[existingIdx];
         product.imageUrls[existingIdx] = imgUrl;
+        await storage.deleteImage(stale);
       } else {
         product.imageUrls.unshift(imgUrl);
       }
