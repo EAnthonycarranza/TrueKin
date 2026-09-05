@@ -21,15 +21,19 @@ exports.createCheckoutSession = async (req, res) => {
     // are copied from the active, admin-managed location on the server.
     if (fulfillmentMethod === 'pickup') {
       const details = req.body.pickup || {};
-      if (!mongoose.isValidObjectId(details.locationId)) throw inputError('Choose a pickup location');
-      const location = await PickupLocation.findOne({ _id: details.locationId, active: true });
-      if (!location) throw inputError('This pickup location is no longer available. Please choose another.');
       pickup = {
-        ...snapshotLocation(location),
-        locationId: location._id,
         contactName: readText(details.contactName, 'Pickup name', 120, true),
         customerInstructions: readText(details.customerInstructions, 'Pickup notes', 2000),
       };
+      // A location is optional. If the customer picked one we snapshot it
+      // server-side; otherwise the order is placed without one and we
+      // coordinate the spot with them after it is in.
+      if (details.locationId) {
+        if (!mongoose.isValidObjectId(details.locationId)) throw inputError('Choose a valid pickup location');
+        const location = await PickupLocation.findOne({ _id: details.locationId, active: true });
+        if (!location) throw inputError('This pickup location is no longer available. Please choose another.');
+        pickup = { ...pickup, ...snapshotLocation(location), locationId: location._id };
+      }
     } else {
       for (const field of ['name', 'street', 'city', 'state', 'zip']) {
         readText(shippingAddress?.[field], `Shipping ${field}`, 200, true);

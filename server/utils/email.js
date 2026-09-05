@@ -138,11 +138,18 @@ function fulfillmentBlock(order) {
     const line = (label, value) => value
       ? `<p style="margin:12px 0 0;color:#0a0a0a;line-height:1.6;font-size:14px;"><strong>${label}</strong><br/>${muted(escapeHtml(value).replace(/\n/g, '<br/>'))}</p>`
       : '';
-    return box('Pickup Details', `
-      <p style="margin:0;color:#0a0a0a;line-height:1.6;font-size:14px;font-weight:600;">
+    // A pickup order may not have a spot yet — we coordinate it afterwards.
+    const place = p.street
+      ? `<p style="margin:0;color:#0a0a0a;line-height:1.6;font-size:14px;font-weight:600;">
         ${escapeHtml(p.name || '')}<br/>
-        ${muted(`${escapeHtml(p.street || '')}<br/>${escapeHtml(p.city || '')}, ${escapeHtml(p.state || '')} ${escapeHtml(p.zip || '')}`)}
-      </p>
+        ${muted(`${escapeHtml(p.street)}<br/>${escapeHtml(p.city || '')}, ${escapeHtml(p.state || '')} ${escapeHtml(p.zip || '')}`)}
+      </p>`
+      : `<p style="margin:0;color:#0a0a0a;line-height:1.6;font-size:14px;font-weight:600;">
+        We&rsquo;ll coordinate your pickup spot with you<br/>
+        ${muted('We&rsquo;ll be in touch to arrange a location and a time that suits you.')}
+      </p>`;
+    return box('Pickup Details', `
+      ${place}
       ${line('Hours', p.hours)}
       ${line('Pickup instructions', p.instructions)}
       ${line('Instructions for your order', p.orderInstructions)}
@@ -150,7 +157,7 @@ function fulfillmentBlock(order) {
         <strong>Coordinate with</strong><br/>
         ${muted(`${escapeHtml(contact.name)} · <a href="mailto:${escapeHtml(contact.email)}" style="color:#c8301f;text-decoration:none;font-weight:700;">${escapeHtml(contact.email)}</a>`)}
       </p>
-      <p style="margin:12px 0 0;color:#5a564c;font-size:13px;">Please wait until your order says &ldquo;Ready for pickup&rdquo; before collecting.</p>
+      <p style="margin:12px 0 0;color:#5a564c;font-size:13px;">We&rsquo;ll confirm everything with you. Please wait until your order says &ldquo;Ready for pickup&rdquo; before collecting.</p>
     `);
   }
 

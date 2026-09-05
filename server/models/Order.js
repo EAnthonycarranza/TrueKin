@@ -4,7 +4,9 @@ const { locationFields, limits } = require('../utils/fulfillment');
 function requiresShipping() { return this.fulfillmentMethod !== 'pickup'; }
 
 const pickupSchema = new mongoose.Schema({
-  locationId: { type: mongoose.Schema.Types.ObjectId, ref: 'PickupLocation', required: true },
+  // Optional: customers can place a pickup order before a spot is settled,
+  // and we coordinate the location with them afterwards.
+  locationId: { type: mongoose.Schema.Types.ObjectId, ref: 'PickupLocation' },
   ...Object.fromEntries(locationFields.map((field) => [field, { type: String, maxlength: limits[field] }])),
   contactName: { type: String, required: true, trim: true, maxlength: 120 },
   customerInstructions: { type: String, trim: true, maxlength: 2000, default: '' },

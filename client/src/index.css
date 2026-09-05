@@ -689,29 +689,45 @@ tbody tr:last-child td { border-bottom: none; }
 
 @media (max-width: 640px) {
   .admin-sidebar {
+    /* Grow with the tabs instead of clipping them. The 900px rule pins this
+       to 58px, which cut off any tab that did not fit on one line. */
+    height: auto;
+    min-height: 58px;
     padding-inline: 8px;
     overflow-x: hidden;
   }
 
   .admin-nav-primary {
+    /* One equal column per tab, counted automatically. This was
+       repeat(4, ...) while the nav had five items, so "Pickup Locations"
+       wrapped onto a second row and was clipped by the bar's fixed height. */
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    /* Reset the centre alignment inherited from the 900px rule so a
+       two-line tab does not sit taller than its neighbours. */
+    align-items: stretch;
     gap: 3px;
     width: 100%;
   }
 
   .admin-nav-link {
+    /* Icon above the label so a two-word tab still fits a narrow column. */
     min-width: 0;
+    flex-direction: column;
     justify-content: center;
-    gap: 5px;
-    padding-inline: 4px;
-    font-size: 10.5px;
-    letter-spacing: 0.04em;
+    text-align: center;
+    gap: 3px;
+    padding: 7px 2px;
+    font-size: 9.5px;
+    line-height: 1.15;
+    letter-spacing: 0.02em;
+    hyphens: auto;
   }
 
   .admin-nav-link svg {
-    width: 15px;
-    height: 15px;
+    width: 16px;
+    height: 16px;
     flex-shrink: 0;
   }
 

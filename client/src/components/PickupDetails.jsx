@@ -4,11 +4,12 @@ import { pickupContact } from '../utils/fulfillment';
 export function PickupCoordinator({ location }) {
   // Per-location contact when the admin has set one, otherwise the shop default.
   const contact = pickupContact(location);
-  return <div className="pickup-coordinator"><UserRound size={20} /><div><strong>Coordinate with {contact.name}</strong><p>Arrange pickup and payment before coming.</p><a href={`mailto:${contact.email}`}>{contact.email}</a></div></div>;
+  return <div className="pickup-coordinator"><UserRound size={20} /><div><strong>We’ll coordinate with you</strong><p>We’ll reach out to arrange your order, the pickup spot, and payment — no need to sort anything out before you order.</p><a href={`mailto:${contact.email}`}>{contact.name} · {contact.email}</a></div></div>;
 }
 
 export function PickupLocationDetails({ location, directions = true }) {
-  if (!location) return null;
+  // No street means no spot is set yet — the order is placed and we coordinate.
+  if (!location || !location.street) return null;
   const address = [location.street, location.city, location.state, location.zip, location.country].filter(Boolean).join(', ');
   return (
     <div className="pickup-location-details">
@@ -29,10 +30,12 @@ export default function PickupDetails({ order }) {
     : order.status === 'ready_for_pickup' ? 'Your order is ready. Bring your order number when you collect it.'
     : order.status === 'cancelled' ? 'This order is cancelled. Please do not travel to collect it.'
     : order.status === 'pending' && order.paymentMethod !== 'pay_on_pickup' ? 'Payment is pending. Pickup preparation starts after payment is confirmed.'
-    : 'We’re preparing your order. Check your order status and wait until it says “Ready for pickup” before coming.';
+    : pickup.street
+      ? 'We’re preparing your order. Check your order status and wait until it says “Ready for pickup” before coming.'
+      : 'We’re preparing your order and we’ll be in touch to arrange your pickup spot and a time that works for you.';
   return (
     <section className="pickup-order-details" aria-label="Pickup details">
-      <div className="pickup-section-heading"><MapPin size={19} /><h3>Pickup at {pickup.name}</h3><span className="badge badge-success">Free</span></div>
+      <div className="pickup-section-heading"><MapPin size={19} /><h3>{pickup.name ? `Pickup at ${pickup.name}` : 'Local pickup'}</h3><span className="badge badge-success">Free</span></div>
       <p className={`pickup-status-note ${order.status === 'ready_for_pickup' ? 'is-ready' : ''}`}>{message}</p>
       <PickupLocationDetails location={pickup} />
       <PickupCoordinator location={pickup} />

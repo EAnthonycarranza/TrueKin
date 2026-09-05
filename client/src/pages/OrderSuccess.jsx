@@ -33,7 +33,7 @@ export default function OrderSuccess() {
         <CheckCircle size={64} color="var(--success)" style={{ marginBottom: 20 }} />
         <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 8 }}>{!order ? 'Check your order' : order.status === 'pending' && order.paymentMethod !== 'pay_on_pickup' ? 'Confirming payment…' : 'Order Confirmed!'}</h1>
         <p style={{ color: 'var(--text-secondary)', marginBottom: 32, fontSize: 16 }}>
-          {pickupPaymentDue(order || {}) ? `Your pickup order is placed. Pay when you collect it and coordinate with ${pickupContact(order?.pickup).name} at ${pickupContact(order?.pickup).email}.` : order ? 'Thank you for your order. View your latest status and details below.' : 'We couldn’t load your confirmation. Use Track Your Order to look it up.'}
+          {pickupPaymentDue(order || {}) ? `Your pickup order is placed. Nothing is due today — we’ll coordinate your pickup spot, timing, and payment with you. Questions? ${pickupContact(order?.pickup).email}.` : order ? 'Thank you for your order. View your latest status and details below.' : 'We couldn’t load your confirmation. Use Track Your Order to look it up.'}
         </p>
 
         {order && (
