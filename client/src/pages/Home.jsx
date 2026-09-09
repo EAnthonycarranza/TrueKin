@@ -8,7 +8,7 @@ import {
 import toast from 'react-hot-toast';
 import { api } from '../api/client';
 import ProductCard from '../components/ProductCard';
-import { ShieldMark, KnotMark, Wordmark } from '../components/brand/Logo';
+import { ShieldMark, KnotMark, StackMark, Wordmark } from '../components/brand/Logo';
 
 const EMPTY_QUOTE = {
   name: '',
@@ -143,10 +143,10 @@ export default function Home() {
             <div className="home-hero-card home-hero-card-3">
               <div className="home-hero-card-tag">Limited</div>
               <div className="home-hero-mock" style={{ background: 'linear-gradient(145deg, #c8301f, #8b3a2a)' }}>
-                <Cross size={78} color="#f4f1ea" strokeWidth={1.5} />
+                <StackMark size={86} style={{ color: '#f4f1ea' }} />
               </div>
               <div className="home-hero-card-info">
-                <strong>Ember Crest</strong>
+                <strong>Ember Standard</strong>
                 <span>$36</span>
               </div>
             </div>

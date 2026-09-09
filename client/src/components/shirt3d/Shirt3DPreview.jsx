@@ -69,8 +69,11 @@ export default function Shirt3DPreview({ designData, colorOverride, style = {}, 
     );
   }
 
-  const hasSleevePrints = !!(prints.left || prints.right);
-  const views = VIEWS.filter((v) => v.kind === 'body' || hasSleevePrints);
+  // Every angle is offered, not just the ones carrying artwork: a sleeve view
+  // is a camera swing (see viewInfo().theta), so it works on a blank sleeve and
+  // customers want to see the garment from the side either way. A dot marks the
+  // views that actually have a print.
+  const views = VIEWS;
 
   return (
     <div style={{ borderRadius: 12, overflow: 'hidden', background: '#ffffff', border: '1px solid #eee', ...style }}>
@@ -81,9 +84,13 @@ export default function Shirt3DPreview({ designData, colorOverride, style = {}, 
             type="button"
             onClick={() => setView(v.id)}
             className={`btn ${view === v.id ? 'btn-primary' : 'btn-secondary'} btn-sm`}
-            style={{ flex: 1 }}
+            aria-pressed={view === v.id}
+            // minWidth lets four labels wrap to a second row rather than
+            // squashing "Right sleeve" down to an unreadable sliver.
+            style={{ flex: '1 1 auto', minWidth: 92 }}
           >
             {v.label}
+            {prints[v.id] ? <span aria-hidden="true" style={{ marginLeft: 6, opacity: 0.65 }}>•</span> : null}
           </button>
         ))}
       </div>

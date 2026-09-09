@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   X, Save, ArrowLeft, Paintbrush, ChevronDown, ChevronUp,
   Box, Layers, Upload, Check, AlertTriangle, Info, Ruler,
-  Palette, Package, Sparkles, Users,
+  Palette, Package, Sparkles, Users, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../../api/client';
@@ -42,6 +42,7 @@ export default function AdminProductEdit() {
   const [sizes, setSizes] = useState([]); // [{ size, quantity, unlimited, style: 'unisex' }]
   const [showUnlimitedWarning, setShowUnlimitedWarning] = useState(null);
   const [existingImages, setExistingImages] = useState([]);
+  const [reorderingImages, setReorderingImages] = useState(false);
   const [snapshotPreviews, setSnapshotPreviews] = useState([]);
   const [snapshotBlobs, setSnapshotBlobs] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -101,6 +102,33 @@ export default function AdminProductEdit() {
       toast.success('Image removed');
     } catch (err) {
       toast.error(err.message);
+    }
+  };
+
+  /**
+   * Move a saved image one slot left or right.
+   *
+   * Position is what the storefront reads: first is the card face and the
+   * product page's default shot, second is the card's hover image, the rest
+   * are gallery thumbnails. Optimistic — the grid moves immediately and rolls
+   * back if the save fails, since this is a one-tap control.
+   */
+  const moveExistingImage = async (index, direction) => {
+    const target = index + direction;
+    if (target < 0 || target >= existingImages.length || reorderingImages) return;
+
+    const previous = existingImages;
+    const next = [...existingImages];
+    [next[index], next[target]] = [next[target], next[index]];
+    setExistingImages(next);
+    setReorderingImages(true);
+    try {
+      await api.adminReorderImages(id, next);
+    } catch (err) {
+      setExistingImages(previous);
+      toast.error(err.message);
+    } finally {
+      setReorderingImages(false);
     }
   };
 
@@ -711,19 +739,52 @@ export default function AdminProductEdit() {
             {existingImages.length > 0 && (
               <div className="tk-shots-group">
                 <p className="tk-shots-label">On file</p>
+                {isEditing && existingImages.length > 1 && (
+                  <p className="tk-shots-hint">
+                    Order decides where a shot appears: first is the card and product page,
+                    second is what the card fades to on hover, the rest are gallery thumbnails.
+                  </p>
+                )}
                 <div className="tk-shots-grid">
                   {existingImages.map((url, i) => (
-                    <div key={i} className="tk-shot">
+                    <div key={url} className="tk-shot">
                       <img src={url} alt="" />
+                      {i < 2 && (
+                        <span className={`tk-shot-role ${i === 0 ? 'is-main' : ''}`}>
+                          {i === 0 ? 'Main' : 'Hover'}
+                        </span>
+                      )}
                       {isEditing && (
-                        <button
-                          type="button"
-                          onClick={() => removeExistingImage(url)}
-                          className="tk-shot-remove"
-                          aria-label="Remove"
-                        >
-                          <X size={13} />
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => removeExistingImage(url)}
+                            className="tk-shot-remove"
+                            aria-label={`Remove image ${i + 1}`}
+                          >
+                            <X size={13} />
+                          </button>
+                          {existingImages.length > 1 && (
+                            <div className="tk-shot-move">
+                              <button
+                                type="button"
+                                onClick={() => moveExistingImage(i, -1)}
+                                disabled={i === 0 || reorderingImages}
+                                aria-label={`Move image ${i + 1} earlier`}
+                              >
+                                <ChevronLeft size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => moveExistingImage(i, 1)}
+                                disabled={i === existingImages.length - 1 || reorderingImages}
+                                aria-label={`Move image ${i + 1} later`}
+                              >
+                                <ChevronRight size={14} />
+                              </button>
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   ))}
@@ -1658,6 +1719,59 @@ export default function AdminProductEdit() {
         }
         .tk-shot-remove:hover { background: var(--brand); }
 
+        .tk-shots-hint {
+          margin: -4px 0 10px;
+          font-size: 12px;
+          line-height: 1.5;
+          color: var(--text-muted);
+        }
+
+        /* Role badge: makes it obvious which shot the card and the hover use. */
+        .tk-shot-role {
+          position: absolute;
+          top: 6px;
+          left: 6px;
+          padding: 3px 7px;
+          border-radius: 3px;
+          background: rgba(255, 255, 255, 0.94);
+          border: 1px solid var(--ink);
+          color: var(--ink);
+          font-family: var(--font-secondary);
+          font-size: 9.5px;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+        }
+        .tk-shot-role.is-main { background: var(--ink); color: #fff; }
+
+        /* Arrows sit on a scrim along the bottom so they stay legible on any shot. */
+        .tk-shot-move {
+          position: absolute;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          display: flex;
+          justify-content: space-between;
+          gap: 6px;
+          padding: 6px;
+          background: linear-gradient(to top, rgba(10, 10, 10, 0.55), transparent);
+        }
+        .tk-shot-move button {
+          width: 26px;
+          height: 26px;
+          border-radius: 50%;
+          background: rgba(255, 255, 255, 0.94);
+          border: 1px solid var(--ink);
+          color: var(--ink);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: background 0.15s, opacity 0.15s;
+        }
+        .tk-shot-move button:hover:not(:disabled) { background: var(--brand); color: #fff; }
+        .tk-shot-move button:disabled { opacity: 0.3; cursor: default; }
+
         /* Submit bar */
         .tk-submit-bar {
           display: flex;
@@ -1918,6 +2032,11 @@ export default function AdminProductEdit() {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
           .tk-shot-remove {
+            width: 36px;
+            height: 36px;
+          }
+          /* Bigger tap targets — the admin is used from a phone. */
+          .tk-shot-move button {
             width: 36px;
             height: 36px;
           }

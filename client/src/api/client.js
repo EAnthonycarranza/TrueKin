@@ -81,6 +81,8 @@ export const api = {
   adminDeleteProduct: (id) => request(`/products/${id}`, { method: 'DELETE' }),
   adminRemoveImage: (id, imageUrl) =>
     request(`/products/${id}/remove-image`, { method: 'PUT', body: { imageUrl } }),
+  adminReorderImages: (id, imageUrls) =>
+    request(`/products/${id}/images/order`, { method: 'PUT', body: { imageUrls } }),
   adminSaveDesign: (id, formData) =>
     request(`/products/${id}/design`, { method: 'PUT', body: formData, isFormData: true }),
 

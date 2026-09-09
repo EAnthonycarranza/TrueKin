@@ -7,6 +7,7 @@ const {
   updateProduct,
   deleteProduct,
   deleteProductImage,
+  reorderProductImages,
   adminGetProducts,
   saveDesign,
 } = require('../controllers/productController');
@@ -23,6 +24,7 @@ router.post('/', auth, adminOnly, upload.array('images', 5), createProduct);
 router.put('/:id', auth, adminOnly, upload.array('images', 5), updateProduct);
 router.delete('/:id', auth, adminOnly, deleteProduct);
 router.put('/:id/remove-image', auth, adminOnly, deleteProductImage);
+router.put('/:id/images/order', auth, adminOnly, reorderProductImages);
 router.put('/:id/design', auth, adminOnly, upload.fields([
   { name: 'designImage', maxCount: 1 },
 ]), saveDesign);

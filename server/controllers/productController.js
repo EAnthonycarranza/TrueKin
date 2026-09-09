@@ -182,6 +182,47 @@ exports.deleteProductImage = async (req, res) => {
   }
 };
 
+/**
+ * Admin: reorder a product's images.
+ *
+ * Position carries meaning on the storefront: the first image is the card face
+ * and the product page's default shot, the second is the card's hover image,
+ * and the rest are gallery thumbnails.
+ *
+ * Deliberately a permutation only — the body must contain exactly the same set
+ * of URLs the product already has. Adding or removing images goes through the
+ * upload and remove-image endpoints, which also manage the R2 objects; letting
+ * this route change membership would orphan or delete files silently.
+ */
+exports.reorderProductImages = async (req, res) => {
+  try {
+    const { imageUrls } = req.body;
+    if (!Array.isArray(imageUrls)) {
+      return res.status(400).json({ message: 'imageUrls must be an array' });
+    }
+
+    const product = await Product.findById(req.params.id);
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
+    const next = imageUrls.map(String);
+    const current = product.imageUrls.map(String);
+    const sameSet = next.length === current.length
+      && new Set(next).size === next.length
+      && [...current].sort().join('\u0000') === [...next].sort().join('\u0000');
+    if (!sameSet) {
+      return res.status(400).json({ message: 'Image order must contain exactly the current images' });
+    }
+
+    product.imageUrls = next;
+    await product.save();
+    res.json({ product });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // Admin: Delete product
 exports.deleteProduct = async (req, res) => {
   try {

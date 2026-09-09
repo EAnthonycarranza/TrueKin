@@ -432,13 +432,27 @@ export const CLIPART_CATEGORIES = [
     })),
   },
   {
+    // Brand marks. `previewBackground` darkens the picker tile for light-ink
+    // artwork, which would otherwise vanish against the default cream tile.
+    // The .webp files are the photographed/textured brand art, trimmed to their
+    // alpha bounds so the decal is sized by the artwork and not by empty canvas;
+    // `thumbnail` keeps the picker grid light while the full asset is only
+    // fetched when the mark is actually placed on a shirt.
     name: 'Truekin',
     items: [
-      { label: 'Shield · Ink', src: '/design-assets/brand/truekin-shield-ink.svg' },
-      { label: 'Shield · Bone', src: '/design-assets/brand/truekin-shield-bone.svg', previewBackground: '#1b1b1b' },
-      { label: 'Logo · Ink', src: '/design-assets/brand/truekin-lockup-ink.svg' },
-      { label: 'Logo · Bone', src: '/design-assets/brand/truekin-lockup-bone.svg', previewBackground: '#1b1b1b' },
+      { label: 'Shield · Ink', src: '/design-assets/brand/truekin-shield-ink.webp', thumbnail: '/design-assets/brand/thumbnails/truekin-shield-ink.webp' },
+      { label: 'Shield · Bone', src: '/design-assets/brand/truekin-shield-bone.webp', thumbnail: '/design-assets/brand/thumbnails/truekin-shield-bone.webp', previewBackground: '#1b1b1b' },
+      { label: 'Logo · Ink', src: '/design-assets/brand/truekin-lockup-ink.webp', thumbnail: '/design-assets/brand/thumbnails/truekin-lockup-ink.webp' },
+      { label: 'Logo · Bone', src: '/design-assets/brand/truekin-lockup-bone.webp', thumbnail: '/design-assets/brand/thumbnails/truekin-lockup-bone.webp', previewBackground: '#1b1b1b' },
       { label: 'Eternal Knot', src: '/design-assets/brand/truekin-knot-ink.svg' },
+
+      { label: 'Lockup · Black', src: '/design-assets/brand/truekin-lockup-black.webp', thumbnail: '/design-assets/brand/thumbnails/truekin-lockup-black.webp' },
+      { label: 'Lockup · White', src: '/design-assets/brand/truekin-lockup-white.webp', thumbnail: '/design-assets/brand/thumbnails/truekin-lockup-white.webp', previewBackground: '#1b1b1b' },
+      { label: 'Lockup · Cream', src: '/design-assets/brand/truekin-lockup-cream.webp', thumbnail: '/design-assets/brand/thumbnails/truekin-lockup-cream.webp', previewBackground: '#1b1b1b' },
+      { label: 'Lockup · Speckle', src: '/design-assets/brand/truekin-lockup-speckle.webp', thumbnail: '/design-assets/brand/thumbnails/truekin-lockup-speckle.webp', previewBackground: '#1b1b1b' },
+      { label: 'Weave · Ink', src: '/design-assets/brand/truekin-weave-ink.webp', thumbnail: '/design-assets/brand/thumbnails/truekin-weave-ink.webp' },
+      { label: 'Weave · White', src: '/design-assets/brand/truekin-weave-white.webp', thumbnail: '/design-assets/brand/thumbnails/truekin-weave-white.webp', previewBackground: '#1b1b1b' },
+      { label: 'Weave · Speckle', src: '/design-assets/brand/truekin-weave-speckle.webp', thumbnail: '/design-assets/brand/thumbnails/truekin-weave-speckle.webp', previewBackground: '#1b1b1b' },
     ],
   },
   {
