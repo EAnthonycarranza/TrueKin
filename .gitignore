@@ -7,4 +7,8 @@ server/uploads/*.webp
 server/uploads/designs/
 client/dist/
 .DS_Store
+# macOS AppleDouble sidecars, created when the tree is copied to a
+# non-HFS volume. 147 of them had been committed; they broke lint with
+# parse errors and shipped to the dyno.
+._*
 *.log

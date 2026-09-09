@@ -58,16 +58,17 @@ export const useCartStore = create(
       openCart: () => set({ isOpen: true }),
       closeCart: () => set({ isOpen: false }),
 
-      get totalItems() {
-        return get().items.reduce((sum, item) => sum + item.quantity, 0);
-      },
-
-      get totalPrice() {
-        return get().items.reduce(
-          (sum, item) => sum + item.price * item.quantity,
-          0
-        );
-      },
+      // NB: no computed `totalItems` / `totalPrice` getters here.
+      //
+      // persist() rehydrates by spreading the freshly-created state into the
+      // stored one, and spreading *invokes* any getter on the object. At that
+      // moment the store is still being constructed, so `get()` returns
+      // undefined, the getter throws, and persist swallows the error and
+      // discards the whole saved cart — every reload emptied the bag.
+      //
+      // Both totals are one `reduce` over `items` and every call site already
+      // does it locally (Navbar, CartDrawer, Cart, Checkout), so there was
+      // nothing to replace them with.
     }),
     {
       name: 'tshirt-cart',
