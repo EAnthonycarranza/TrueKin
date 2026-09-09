@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  ArrowRight, Truck, Shield, RefreshCw, Sparkles, Star, Check,
+  ArrowRight, MapPin, Shield, RefreshCw, Sparkles, Star, Check,
   Cross, Heart, Users, Flame, Scissors, Package,
   Palette, Send, Building2, CalendarDays, MessageSquare,
 } from 'lucide-react';
@@ -83,9 +83,9 @@ export default function Home() {
             <p className="home-hero-desc">
               Truekin is a heat-press shop built around <strong>your</strong>
               {' '}artwork. Send us your logo, your team graphic, your church
-              crest — we'll cut it, press it by hand, and ship it on a premium
-              unisex tee. We also release a small line of our own designs, but
-              the main thing we do is press yours.
+              crest — we'll cut it, press it by hand onto a premium unisex tee,
+              and hand it to you in person. We also release a small line of our
+              own designs, but the main thing we do is press yours.
             </p>
             <div className="home-hero-cta">
               <a href="#quote" className="btn btn-primary btn-xl">
@@ -304,9 +304,9 @@ export default function Home() {
               },
               {
                 step: '04',
-                icon: Truck,
-                title: 'Pack & Send',
-                desc: 'Folded, tagged, and shipped in recycled mailers inside 3–5 days. A hand-written scripture note goes in every box.',
+                icon: MapPin,
+                title: 'Pack & Hand Off',
+                desc: 'Folded, tagged, and bagged inside 3–5 days. Then we set a time and place with you and put it in your hands. A hand-written scripture note goes in every order.',
               },
             ].map((s) => (
               <div key={s.step} className="home-craft-step">
@@ -337,7 +337,7 @@ export default function Home() {
               <span className="rule rule-brand" aria-hidden />
               <p className="home-quote-lead">
                 Whether you need a dozen or five hundred, we'll price it, press
-                it, and ship it. Most quotes go back within one business day.
+                it, and hand it over. Most quotes go back within one business day.
               </p>
               <ul className="home-quote-list">
                 <li><Check size={14} /> Free art + mockup review</li>
@@ -484,7 +484,7 @@ export default function Home() {
             {[
               { icon: Flame, title: 'Heat-Pressed By Hand', desc: 'Every tee pressed one at a time — no factory runs, no corners cut.' },
               { icon: Heart, title: 'Premium Blanks', desc: 'Bella + Canvas, Gildan, Comfort Colors — sourced for feel and longevity.' },
-              { icon: Truck, title: 'Fast Shipping', desc: 'Free on orders $50+. Printed, packed, and sent inside 3–5 days.' },
+              { icon: MapPin, title: 'Free Local Pickup', desc: 'No postage, no waiting on a courier. Pressed inside 3–5 days, then we arrange the handoff with you.' },
               { icon: RefreshCw, title: 'Honest Returns', desc: '30 days, no pressure. Your peace matters more than the sale.' },
             ].map((f, i) => (
               <div key={i} className="home-feature">

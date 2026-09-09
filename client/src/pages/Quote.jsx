@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Check, Send, MessageSquare, Scissors, Palette, Package, Truck,
+  Check, Send, MessageSquare, Scissors, Palette, Package, MapPin,
   Clock, ShieldCheck, Users, Sparkles, ArrowRight,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -38,9 +38,9 @@ const PROCESS_STEPS = [
   },
   {
     icon: Package,
-    title: 'Packed + shipped',
+    title: 'Packed + handed over',
     desc:
-      'Sorted by size, folded, boxed. Free shipping over $50 — in your hands in 7–14 days.',
+      'Sorted by size, folded, bagged. Free local pickup — in your hands in 7–14 days.',
   },
 ];
 
@@ -59,7 +59,7 @@ const FAQS = [
   },
   {
     q: 'How fast is turnaround?',
-    a: 'Most orders ship within 7–14 days of art approval. Rush timelines available — just tell us when you need them.',
+    a: 'Most orders are ready to collect within 7–14 days of art approval. Rush timelines available — just tell us when you need them.',
   },
   {
     q: 'Can I mix sizes?',
@@ -122,7 +122,7 @@ export default function Quote() {
           </h1>
           <p className="tk-quote-sub">
             From 12 shirts to five hundred, we handle the whole run — art,
-            blanks, press, and ship — with the same care whether you're a
+            blanks, press, and handoff — with the same care whether you're a
             small group, a church, a team, or a business.
           </p>
           <div className="tk-quote-hero-actions">
@@ -387,8 +387,8 @@ export default function Quote() {
             <span>Trusted by churches, teams, and small businesses</span>
           </div>
           <div className="tk-quote-trust-item">
-            <Truck size={18} />
-            <span>Free shipping over $50</span>
+            <MapPin size={18} />
+            <span>Free local pickup</span>
           </div>
         </div>
       </section>

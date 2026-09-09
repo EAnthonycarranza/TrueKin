@@ -9,7 +9,10 @@ const { sendOrderConfirmation } = require('../utils/email');
 // Create Stripe Checkout Session
 exports.createCheckoutSession = async (req, res) => {
   try {
-    const { items, shippingAddress, guestEmail, fulfillmentMethod = 'shipping', paymentMethod = 'card' } = req.body;
+    // Pickup is the default because the storefront is pickup-only. Shipping is
+    // still accepted so an admin can ship an order by hand from the order
+    // console, and so orders placed before the change keep working.
+    const { items, shippingAddress, guestEmail, fulfillmentMethod = 'pickup', paymentMethod = 'card' } = req.body;
     if (!['shipping', 'pickup'].includes(fulfillmentMethod)) throw inputError('Choose shipping or pickup');
     if (!['card', 'pay_on_pickup'].includes(paymentMethod)) throw inputError('Choose a valid payment method');
     if (paymentMethod === 'pay_on_pickup' && fulfillmentMethod !== 'pickup') throw inputError('Payment at pickup is only available for pickup orders');

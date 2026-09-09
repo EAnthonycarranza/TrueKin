@@ -1,6 +1,7 @@
 const Order = require('../models/Order');
 const User = require('../models/User');
 const { readText, validateOrderStatus } = require('../utils/fulfillment');
+const { sendPickupReadyNotification } = require('../utils/email');
 
 // Public: Lookup an order by email + orderId for anonymous tracking.
 // Either:
@@ -138,6 +139,9 @@ exports.updateOrderStatus = async (req, res) => {
     }
 
     validateOrderStatus(order, status, req.body.paymentReceived);
+    // Only the first move into ready_for_pickup should email the customer;
+    // re-saving an order that is already ready must not send it again.
+    const announcePickup = status === 'ready_for_pickup' && order.status !== 'ready_for_pickup';
     order.status = status;
     if (status === 'ready_for_pickup' && !order.pickup.readyAt) order.pickup.readyAt = new Date();
     if (status === 'picked_up' && !order.pickup.pickedUpAt) order.pickup.pickedUpAt = new Date();
@@ -146,6 +150,10 @@ exports.updateOrderStatus = async (req, res) => {
       order.paidAt = new Date();
     }
     await order.save();
+    if (announcePickup) {
+      sendPickupReadyNotification(order).catch((e) =>
+        console.error('Pickup ready email failed:', e.message));
+    }
     res.json({ order });
   } catch (error) {
     res.status(error.status || 500).json({ message: error.message });

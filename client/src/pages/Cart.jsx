@@ -98,7 +98,7 @@ export default function Cart() {
                 <span style={{ fontSize: 22, fontWeight: 700 }}>${(totalPrice / 100).toFixed(2)}</span>
               </div>
               <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
-                Shipping calculated at checkout
+                Free local pickup · we'll arrange the handoff with you
               </p>
               <Link to="/checkout" className="btn btn-primary btn-lg" style={{ width: '100%' }}>
                 Proceed to Checkout <ArrowRight size={18} />

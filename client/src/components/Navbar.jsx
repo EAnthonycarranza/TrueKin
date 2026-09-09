@@ -34,7 +34,7 @@ export default function Navbar() {
 
   return (
     <>
-      {/* Scripture / shipping announcement strip */}
+      {/* Scripture / pickup announcement strip */}
       {!isAdminRoute && (
         <div style={styles.announce}>
           <div style={styles.announceInner} className="announce-marquee">
@@ -42,7 +42,7 @@ export default function Navbar() {
             <span style={styles.announceDot}>✦</span>
             <span>HEAT-PRESSED BY HAND</span>
             <span style={styles.announceDot}>✦</span>
-            <span>FREE SHIPPING OVER $50</span>
+            <span>FREE LOCAL PICKUP</span>
             <span style={styles.announceDot}>✦</span>
             <span>SMALL-BATCH · MADE TO ORDER</span>
             <span style={styles.announceDot}>✦</span>
@@ -52,7 +52,7 @@ export default function Navbar() {
             <span style={styles.announceDot}>✦</span>
             <span>HEAT-PRESSED BY HAND</span>
             <span style={styles.announceDot}>✦</span>
-            <span>FREE SHIPPING OVER $50</span>
+            <span>FREE LOCAL PICKUP</span>
             <span style={styles.announceDot}>✦</span>
             <span>SMALL-BATCH · MADE TO ORDER</span>
           </div>

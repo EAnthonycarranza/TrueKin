@@ -1,18 +1,14 @@
-import { X, Minus, Plus, Trash2, ArrowRight, Truck } from 'lucide-react';
+import { X, Minus, Plus, Trash2, ArrowRight, MapPin } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useCartStore } from '../store/cartStore';
 import { ShieldMark } from './brand/Logo';
-
-const FREE_SHIPPING_THRESHOLD = 5000; // $50.00 in cents
 
 export default function CartDrawer() {
   const { items, isOpen, closeCart, removeItem, updateQuantity } = useCartStore();
   const navigate = useNavigate();
 
   const totalPrice = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const remaining = Math.max(0, FREE_SHIPPING_THRESHOLD - totalPrice);
-  const progress = Math.min(100, (totalPrice / FREE_SHIPPING_THRESHOLD) * 100);
 
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && isOpen && closeCart();
@@ -36,7 +32,7 @@ export default function CartDrawer() {
             <ShieldMark size={28} />
             <div>
               <h3 className="cart-title">The Bag</h3>
-              <p className="cart-subtitle">{items.length} {items.length === 1 ? 'item' : 'items'} · ready to ship</p>
+              <p className="cart-subtitle">{items.length} {items.length === 1 ? 'item' : 'items'} · ready to press</p>
             </div>
           </div>
           <button onClick={closeCart} className="cart-close" aria-label="Close cart">
@@ -47,17 +43,8 @@ export default function CartDrawer() {
         {items.length > 0 && (
           <div className="cart-ship-banner">
             <div className="cart-ship-head">
-              <Truck size={15} />
-              {remaining > 0 ? (
-                <span>
-                  You're <strong>${(remaining / 100).toFixed(2)}</strong> away from free shipping
-                </span>
-              ) : (
-                <span><strong>You unlocked free shipping!</strong></span>
-              )}
-            </div>
-            <div className="cart-ship-bar">
-              <div className="cart-ship-fill" style={{ width: `${progress}%` }} />
+              <MapPin size={15} />
+              <span><strong>Free local pickup</strong> — we'll arrange the handoff with you</span>
             </div>
           </div>
         )}
@@ -147,8 +134,8 @@ export default function CartDrawer() {
               <span>${(totalPrice / 100).toFixed(2)}</span>
             </div>
             <div className="cart-row cart-row-muted">
-              <span>Shipping</span>
-              <span>{remaining > 0 ? 'Calculated at checkout' : 'Free'}</span>
+              <span>Local pickup</span>
+              <span>Free</span>
             </div>
             <hr className="divider" style={{ margin: '12px 0' }} />
             <div className="cart-row cart-row-total">
@@ -242,19 +229,6 @@ export default function CartDrawer() {
           gap: 8px;
           font-size: 13px;
           color: var(--text);
-          margin-bottom: 8px;
-        }
-        .cart-ship-bar {
-          height: 4px;
-          background: #e8e4dd;
-          border-radius: 4px;
-          overflow: hidden;
-        }
-        .cart-ship-fill {
-          height: 100%;
-          background: linear-gradient(90deg, var(--ink), var(--brand));
-          border-radius: 4px;
-          transition: width 0.4s var(--ease);
         }
 
         .cart-body {
