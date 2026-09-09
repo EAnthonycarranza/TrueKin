@@ -1,6 +1,6 @@
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { ShoppingBag, User, LogOut, LayoutDashboard, Menu, X, Search, Store } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { useCartStore } from '../store/cartStore';
 import { ShieldMark, Wordmark } from './brand/Logo';
@@ -9,9 +9,29 @@ export default function Navbar() {
   const { user, logout } = useAuthStore();
   const items = useCartStore((s) => s.items);
   const openCart = useCartStore((s) => s.openCart);
-  const [mobileOpen, setMobileOpen] = useState(false);
+  /**
+   * The drawer has three states rather than two so it can animate *out*.
+   * 'closing' keeps it mounted while the slide-out plays; the animationend
+   * handler (with a timeout as a backstop, in case the animation never fires)
+   * moves it to 'closed' and unmounts it.
+   */
+  const [menu, setMenu] = useState('closed');
+  const mobileOpen = menu !== 'closed';
   const [scrolled, setScrolled] = useState(false);
   const location = useLocation();
+  const closeTimer = useRef(null);
+
+  const openMenu = () => {
+    clearTimeout(closeTimer.current);
+    setMenu('open');
+  };
+  const closeMenu = useCallback(() => {
+    setMenu((current) => (current === 'open' ? 'closing' : current));
+  }, []);
+  const finishClose = useCallback(() => {
+    clearTimeout(closeTimer.current);
+    setMenu((current) => (current === 'closing' ? 'closed' : current));
+  }, []);
 
   const totalItems = items.reduce((sum, i) => sum + i.quantity, 0);
   const isAdminRoute = location.pathname.startsWith('/admin');
@@ -23,14 +43,32 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  // Backstop for navigation the drawer's own links do not cause — the back
+  // button, or a redirect. `search` is in the key because Shop, New Drop and
+  // The Kin all live at /shop and differ only by query string: watching
+  // pathname alone left the drawer open on two of the three.
+  // Starts the close rather than forcing 'closed' — otherwise this fires on the
+  // same tick as a link tap and unmounts the drawer before its slide-out runs.
   useEffect(() => {
-    setMobileOpen(false);
-  }, [location.pathname]);
+    closeMenu();
+  }, [location.pathname, location.search, closeMenu]);
 
+  // Hold the scroll lock through the close animation so the page cannot jump
+  // out from under the drawer while it is still sliding away.
   useEffect(() => {
     document.body.style.overflow = mobileOpen ? 'hidden' : '';
     return () => { document.body.style.overflow = ''; };
   }, [mobileOpen]);
+
+  useEffect(() => () => clearTimeout(closeTimer.current), []);
+
+  // If the animation is suppressed (reduced motion, a background tab),
+  // animationend never arrives — unmount anyway.
+  useEffect(() => {
+    if (menu !== 'closing') return undefined;
+    closeTimer.current = setTimeout(finishClose, 400);
+    return () => clearTimeout(closeTimer.current);
+  }, [menu, finishClose]);
 
   return (
     <>
@@ -143,7 +181,7 @@ export default function Navbar() {
             <button
               style={styles.menuBtn}
               className="nav-menu-btn"
-              onClick={() => setMobileOpen((o) => !o)}
+              onClick={() => (menu === 'open' ? closeMenu() : openMenu())}
               aria-label="Menu"
             >
               {mobileOpen ? <X size={22} /> : <Menu size={22} />}
@@ -155,8 +193,16 @@ export default function Navbar() {
       {/* Mobile drawer */}
       {mobileOpen && (
         <>
-          <div style={styles.mobileOverlay} onClick={() => setMobileOpen(false)} />
-          <aside style={styles.mobileDrawer} className="tk-mobile-drawer">
+          <div
+            style={styles.mobileOverlay}
+            className={`tk-mobile-overlay ${menu === 'closing' ? 'is-closing' : ''}`}
+            onClick={closeMenu}
+          />
+          <aside
+            style={styles.mobileDrawer}
+            className={`tk-mobile-drawer ${menu === 'closing' ? 'is-closing' : ''}`}
+            onAnimationEnd={(e) => { if (e.target === e.currentTarget) finishClose(); }}
+          >
             <div className="tk-mobile-drawer-head">
               <Link to="/" className="tk-mobile-drawer-brand" aria-label="Truekin home">
                 <ShieldMark size={34} />
@@ -165,13 +211,13 @@ export default function Navbar() {
               <button
                 type="button"
                 className="tk-mobile-drawer-close"
-                onClick={() => setMobileOpen(false)}
+                onClick={closeMenu}
                 aria-label="Close menu"
               >
                 <X size={22} />
               </button>
             </div>
-            <nav style={styles.mobileNav}>
+            <nav style={styles.mobileNav} onClick={closeMenu}>
               <Link to="/shop" style={styles.mobileLink}>Shop</Link>
               <Link to="/shop?sort=newest" style={styles.mobileLink}>New Drop</Link>
               <Link to="/shop?featured=true" style={styles.mobileLink}>The Kin (Featured)</Link>
@@ -209,6 +255,21 @@ export default function Navbar() {
           animation: marquee 42s linear infinite;
         }
         .nav-menu-btn { display: none !important; }
+        .tk-mobile-overlay { animation: fadeInScrim 0.26s var(--ease) both; }
+        .tk-mobile-overlay.is-closing { animation: fadeOutScrim 0.22s var(--ease) both; }
+        @keyframes fadeInScrim { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes fadeOutScrim { from { opacity: 1; } to { opacity: 0; } }
+
+        /* Honour the OS setting: no slide, no fade — but keep a non-zero
+           duration so animationend still fires and the drawer still unmounts. */
+        @media (prefers-reduced-motion: reduce) {
+          .tk-mobile-drawer,
+          .tk-mobile-drawer.is-closing,
+          .tk-mobile-overlay,
+          .tk-mobile-overlay.is-closing {
+            animation-duration: 0.01ms !important;
+          }
+        }
         @media (max-width: 860px) {
           .nav-links-desktop { display: none !important; }
           .nav-menu-btn { display: inline-flex !important; }
@@ -277,12 +338,22 @@ export default function Navbar() {
             padding: 0 0 max(18px, env(safe-area-inset-bottom)) !important;
             border-radius: 0 !important;
             overflow-y: auto;
-            animation: slideInMenu 0.26s var(--ease);
+            /* fill-mode both holds the final frame, so the panel cannot flash
+               back to its untransformed position between the animation ending
+               and the unmount landing. */
+            animation: slideInMenu 0.26s var(--ease) both;
+          }
+          .tk-mobile-drawer.is-closing {
+            animation: slideOutMenu 0.22s var(--ease) both;
           }
           .tk-mobile-drawer nav { padding: 10px; }
           @keyframes slideInMenu {
             from { transform: translateX(100%); }
             to { transform: translateX(0); }
+          }
+          @keyframes slideOutMenu {
+            from { transform: translateX(0); }
+            to { transform: translateX(100%); }
           }
         }
       `}</style>
