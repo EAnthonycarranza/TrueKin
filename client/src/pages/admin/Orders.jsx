@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Eye, Package } from 'lucide-react';
+import { Eye, Package, Trash2, Download, Upload, Loader } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { statusLabel, pickupPaymentDue } from '../../utils/fulfillment';
+import { statusLabel } from '../../utils/fulfillment';
 import { api } from '../../api/client';
 import AdminLayout from '../../components/AdminLayout';
+import ConfirmModal from '../../components/ConfirmModal';
 
 const statusBadge = {
   pending: 'badge-warning',
@@ -21,6 +22,11 @@ export default function AdminOrders() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importReport, setImportReport] = useState(null);
+  const fileInput = useRef(null);
 
   const fetchOrders = () => {
     setLoading(true);
@@ -31,6 +37,43 @@ export default function AdminOrders() {
   };
 
   useEffect(() => { fetchOrders(); }, [filter]);
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await api.adminDeleteOrder(deleteTarget._id);
+      toast.success(`Order #${deleteTarget._id.slice(-8).toUpperCase()} deleted`);
+      setDeleteTarget(null);
+      fetchOrders();
+    } catch (err) {
+      toast.error(err.message || 'Could not delete the order');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleImport = async (event) => {
+    const file = event.target.files?.[0];
+    // Clear immediately so re-picking the same file still fires a change event.
+    event.target.value = '';
+    if (!file) return;
+    setImporting(true);
+    setImportReport(null);
+    try {
+      const csv = await file.text();
+      const report = await api.adminImportOrders(csv);
+      setImportReport(report);
+      const changed = report.created + report.updated;
+      if (changed) toast.success(`${report.created} restored, ${report.updated} updated`);
+      if (report.failed) toast.error(`${report.failed} ${report.failed === 1 ? 'row' : 'rows'} could not be imported`);
+      if (changed) fetchOrders();
+    } catch (err) {
+      toast.error(err.message || 'Import failed');
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const statusFilters = [
     { v: '', l: 'All' },
@@ -46,7 +89,52 @@ export default function AdminOrders() {
     <AdminLayout
       title="Orders"
       description={`${orders.length} ${orders.length === 1 ? 'order' : 'orders'}`}
+      action={
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <a
+            className="btn btn-secondary"
+            href={api.adminExportOrdersUrl(filter)}
+            download
+          >
+            <Download size={15} /> Export CSV
+          </a>
+          <button
+            className="btn btn-secondary"
+            onClick={() => fileInput.current?.click()}
+            disabled={importing}
+          >
+            {importing ? <><Loader size={15} className="spin" /> Importing…</> : <><Upload size={15} /> Import CSV</>}
+          </button>
+          <input
+            ref={fileInput}
+            type="file"
+            accept=".csv,text/csv"
+            onChange={handleImport}
+            style={{ display: 'none' }}
+          />
+        </div>
+      }
     >
+      {importReport && (
+        <div className="card" style={{ padding: 18, marginBottom: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+            <div>
+              <strong style={{ fontSize: 14 }}>Import finished</strong>
+              <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>
+                {importReport.created} restored · {importReport.updated} updated · {importReport.failed} failed
+              </p>
+            </div>
+            <button className="btn btn-secondary btn-sm" onClick={() => setImportReport(null)}>Dismiss</button>
+          </div>
+          {importReport.errors?.length > 0 && (
+            <ul style={{ margin: '12px 0 0', paddingLeft: 18, fontSize: 13, color: 'var(--danger)' }}>
+              {importReport.errors.map((e) => (
+                <li key={e.line}>Row {e.line}: {e.message}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
       {/* Status filter chips */}
       <div className="admin-order-filters" style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
         {statusFilters.map((s) => (
@@ -144,6 +232,13 @@ export default function AdminOrders() {
                         <Link to={`/admin/orders/${order._id}`} className="btn btn-secondary btn-sm" aria-label={`View order ${order._id.slice(-8)}`}>
                           <Eye size={14} /> View
                         </Link>
+                        <button
+                          className="btn btn-danger btn-sm"
+                          onClick={() => setDeleteTarget(order)}
+                          aria-label={`Delete order ${order._id.slice(-8)}`}
+                        >
+                          <Trash2 size={14} /> Delete
+                        </button>
                       </td>
                     </tr>
                   ))
@@ -153,6 +248,26 @@ export default function AdminOrders() {
           </div>
         </div>
       )}
+      <ConfirmModal
+        open={!!deleteTarget}
+        title="Delete Order"
+        busy={deleting}
+        confirmLabel="Delete Order"
+        busyLabel="Deleting…"
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+      >
+        Permanently delete order{' '}
+        <strong>#{deleteTarget?._id.slice(-8).toUpperCase()}</strong>
+        {' '}&mdash; {deleteTarget?.items?.length} {deleteTarget?.items?.length === 1 ? 'item' : 'items'},{' '}
+        <strong>${((deleteTarget?.totalAmount || 0) / 100).toFixed(2)}</strong>,{' '}
+        {statusLabel(deleteTarget?.status)}
+        {deleteTarget?.guestEmail || deleteTarget?.user?.email
+          ? <> for {deleteTarget.guestEmail || deleteTarget.user.email}</>
+          : null}?
+        <br /><br />
+        This cannot be undone. Export the orders to CSV first if you might want it back.
+      </ConfirmModal>
     </AdminLayout>
   );
 }

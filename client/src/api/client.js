@@ -95,6 +95,11 @@ export const api = {
   adminUpdateOrderStatus: (id, status, paymentReceived = false) =>
     request(`/orders/admin/${id}/status`, { method: 'PUT', body: { status, paymentReceived } }),
   adminGetStats: () => request('/orders/admin/stats'),
+  adminDeleteOrder: (id) => request(`/orders/admin/${id}`, { method: 'DELETE' }),
+  adminImportOrders: (csv) => request('/orders/admin/import', { method: 'POST', body: { csv } }),
+  // Export is a plain link, not a fetch — the browser handles the download and
+  // the auth cookie rides along, so there is nothing to wire up here.
+  adminExportOrdersUrl: (status) => `/api/orders/admin/export${status ? `?status=${encodeURIComponent(status)}` : ''}`,
 
   adminCreateLabel: (body) => request('/shipping/label', { method: 'POST', body }),
   adminGetOrderRates: (orderId) => request(`/shipping/order/${orderId}/rates`),

@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Edit, Trash2, Eye, EyeOff, AlertTriangle, X, Search } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, EyeOff, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../../api/client';
 import AdminLayout from '../../components/AdminLayout';
+import ConfirmModal from '../../components/ConfirmModal';
 
 export default function AdminProducts() {
   const [products, setProducts] = useState([]);
@@ -175,116 +176,20 @@ export default function AdminProducts() {
           </div>
         </div>
 
-      {/* Delete Confirmation Modal */}
-      {deleteTarget && (
-        <div style={modalStyles.overlay} onClick={() => !deleting && setDeleteTarget(null)}>
-          <div style={modalStyles.modal} onClick={(e) => e.stopPropagation()}>
-            <button
-              style={modalStyles.closeBtn}
-              onClick={() => !deleting && setDeleteTarget(null)}
-              aria-label="Close"
-            >
-              <X size={18} />
-            </button>
+      <ConfirmModal
+        open={!!deleteTarget}
+        title="Delete Product"
+        busy={deleting}
+        confirmLabel="Delete Product"
+        busyLabel="Deleting..."
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+      >
+        Are you sure you want to delete <strong>&quot;{deleteTarget?.title}&quot;</strong>?
+        This action cannot be undone and will permanently remove the product, its images, and design data.
+      </ConfirmModal>
 
-            <div style={modalStyles.iconWrap}>
-              <AlertTriangle size={32} color="#dc2626" />
-            </div>
-
-            <h2 style={modalStyles.title}>Delete Product</h2>
-            <p style={modalStyles.message}>
-              Are you sure you want to delete <strong>"{deleteTarget.title}"</strong>?
-              This action cannot be undone and will permanently remove the product, its images, and design data.
-            </p>
-
-            <div style={modalStyles.actions}>
-              <button
-                className="btn btn-secondary"
-                style={{ flex: 1 }}
-                onClick={() => setDeleteTarget(null)}
-                disabled={deleting}
-              >
-                Cancel
-              </button>
-              <button
-                className="btn btn-danger"
-                style={{ flex: 1 }}
-                onClick={handleDelete}
-                disabled={deleting}
-              >
-                <Trash2 size={16} />
-                {deleting ? 'Deleting...' : 'Delete Product'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </AdminLayout>
   );
 }
 
-const modalStyles = {
-  overlay: {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(0, 0, 0, 0.5)',
-    backdropFilter: 'blur(4px)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 9999,
-    padding: 16,
-  },
-  modal: {
-    background: '#fff',
-    borderRadius: 16,
-    padding: '32px 28px 24px',
-    maxWidth: 420,
-    width: '100%',
-    position: 'relative',
-    boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-    animation: 'fadeIn 0.2s ease',
-  },
-  closeBtn: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    color: '#9ca3af',
-    padding: 4,
-    borderRadius: 6,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: '50%',
-    background: '#fef2f2',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    margin: '0 auto 16px',
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 700,
-    textAlign: 'center',
-    marginBottom: 8,
-    color: '#111',
-  },
-  message: {
-    fontSize: 14,
-    lineHeight: 1.6,
-    color: '#6b7280',
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  actions: {
-    display: 'flex',
-    gap: 12,
-  },
-};
