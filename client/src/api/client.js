@@ -38,6 +38,9 @@ export const api = {
   getProducts: (params = '') => request(`/products${params ? '?' + params : ''}`),
   getProduct: (id) => request(`/products/${id}`),
 
+  // Storefront content the admin edits (homepage hero cards)
+  getHomeSettings: () => request('/settings/home'),
+
   // Checkout
   createCheckoutSession: (body) => request('/checkout/create-session', { method: 'POST', body }),
   getOrderBySession: (sessionId) => request(`/checkout/order/${sessionId}`),
@@ -99,4 +102,7 @@ export const api = {
   adminRefundLabel: (orderId) =>
     request(`/shipping/order/${orderId}/refund`, { method: 'POST' }),
   adminListCarriers: () => request('/shipping/carriers'),
+
+  adminGetHomeSettings: () => request('/settings/admin/home'),
+  adminSaveHomeSettings: (body) => request('/settings/admin/home', { method: 'PUT', body }),
 };

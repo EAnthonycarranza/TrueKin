@@ -38,6 +38,7 @@ app.use('/api/pickup', require('./routes/pickup'));
 app.use('/api/shipping', require('./routes/shipping'));
 app.use('/api/quotes', require('./routes/quotes'));
 app.use('/api/reviews', require('./routes/reviews'));
+app.use('/api/settings', require('./routes/settings'));
 
 // Health check
 app.get('/api/health', (req, res) => {

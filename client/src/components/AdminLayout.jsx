@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import {
-  LayoutDashboard, Shirt, ClipboardList, PlusCircle, Settings, ArrowUpRight, MapPin,
+  LayoutDashboard, Shirt, ClipboardList, PlusCircle, Settings, ArrowUpRight, MapPin, Home,
 } from 'lucide-react';
 import { ShieldMark, Wordmark } from './brand/Logo';
 
@@ -10,6 +10,7 @@ const navItems = [
   { to: '/admin/products/new', label: 'New Drop', icon: PlusCircle },
   { to: '/admin/orders', label: 'Orders', icon: ClipboardList },
   { to: '/admin/pickup-locations', label: 'Pickup Locations', icon: MapPin },
+  { to: '/admin/homepage', label: 'Storefront', icon: Home },
 ];
 
 export default function AdminLayout({ children, title, description, action }) {

@@ -20,8 +20,53 @@ const EMPTY_QUOTE = {
   details: '',
 };
 
+/**
+ * The three hero cards fall back to these when the admin hasn't chosen a
+ * product for a slot (or the one they chose has since been deactivated).
+ * They are brand marks on a gradient rather than photos, so the hero is never
+ * empty and never shows a broken image — but they are decoration, not
+ * products, so they carry no link and no real price.
+ */
+const HERO_FALLBACK = [
+  { tag: 'Bestseller', title: 'Kingdom Heavyweight', price: 3400, Mark: ShieldMark, markSize: 78, style: { background: 'linear-gradient(145deg, #0a0a0a, #232323)', color: '#f4f1ea' } },
+  { tag: 'New Drop', title: 'Bone Cross Tee', price: 3200, Mark: KnotMark, markSize: 78, style: { background: 'linear-gradient(145deg, #f4f1ea, #d9d3c2)', color: '#0a0a0a' } },
+  { tag: 'Limited', title: 'Ember Standard', price: 3600, Mark: StackMark, markSize: 86, style: { background: 'linear-gradient(145deg, #c8301f, #8b3a2a)', color: '#f4f1ea' } },
+];
+
+/** One floating hero card: a real product when set, otherwise the fallback. */
+function HeroCard({ slot, card, position }) {
+  const fallback = HERO_FALLBACK[slot];
+  const product = card?.product || null;
+  const tag = (card?.tag || '').trim() || fallback.tag;
+  const title = product ? product.title : fallback.title;
+  const price = product ? product.price : fallback.price;
+  const Mark = fallback.Mark;
+
+  const body = (
+    <>
+      <div className="home-hero-card-tag">{tag}</div>
+      <div className="home-hero-mock" style={product?.imageUrl ? { background: 'var(--bg-soft)' } : fallback.style}>
+        {product?.imageUrl
+          ? <img src={product.imageUrl} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          : <Mark size={fallback.markSize} />}
+      </div>
+      <div className="home-hero-card-info">
+        <strong>{title}</strong>
+        <span>${(price / 100).toFixed(0)}</span>
+      </div>
+    </>
+  );
+
+  const className = `home-hero-card home-hero-card-${position}`;
+  // Only a real product is worth linking to; the fallback is decoration.
+  return product
+    ? <Link to={`/product/${product._id}`} className={className}>{body}</Link>
+    : <div className={className} aria-hidden>{body}</div>;
+}
+
 export default function Home() {
   const [featured, setFeatured] = useState([]);
+  const [heroCards, setHeroCards] = useState([]);
   const [email, setEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
 
@@ -33,6 +78,11 @@ export default function Home() {
   useEffect(() => {
     api.getProducts('featured=true')
       .then((d) => setFeatured(d.products || []))
+      .catch(() => {});
+    // A failure here is not worth surfacing: the hero falls back to its
+    // built-in cards and the page reads exactly as it did before.
+    api.getHomeSettings()
+      .then((d) => setHeroCards(d.heroCards || []))
       .catch(() => {});
   }, []);
 
@@ -116,40 +166,13 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="home-hero-visual" aria-hidden>
-            <div className="home-hero-crest">
+          <div className="home-hero-visual">
+            <div className="home-hero-crest" aria-hidden>
               <KnotMark size={340} />
             </div>
-            <div className="home-hero-card home-hero-card-1">
-              <div className="home-hero-card-tag">Bestseller</div>
-              <div className="home-hero-mock" style={{ background: 'linear-gradient(145deg, #0a0a0a, #232323)' }}>
-                <ShieldMark size={78} style={{ color: '#f4f1ea' }} />
-              </div>
-              <div className="home-hero-card-info">
-                <strong>Kingdom Heavyweight</strong>
-                <span>$34</span>
-              </div>
-            </div>
-            <div className="home-hero-card home-hero-card-2">
-              <div className="home-hero-card-tag">New Drop</div>
-              <div className="home-hero-mock" style={{ background: 'linear-gradient(145deg, #f4f1ea, #d9d3c2)', color: '#0a0a0a' }}>
-                <KnotMark size={78} />
-              </div>
-              <div className="home-hero-card-info">
-                <strong>Bone Cross Tee</strong>
-                <span>$32</span>
-              </div>
-            </div>
-            <div className="home-hero-card home-hero-card-3">
-              <div className="home-hero-card-tag">Limited</div>
-              <div className="home-hero-mock" style={{ background: 'linear-gradient(145deg, #c8301f, #8b3a2a)' }}>
-                <StackMark size={86} style={{ color: '#f4f1ea' }} />
-              </div>
-              <div className="home-hero-card-info">
-                <strong>Ember Standard</strong>
-                <span>$36</span>
-              </div>
-            </div>
+            {HERO_FALLBACK.map((_, i) => (
+              <HeroCard key={i} slot={i} position={i + 1} card={heroCards[i]} />
+            ))}
           </div>
         </div>
       </section>

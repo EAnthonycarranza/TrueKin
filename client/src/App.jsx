@@ -26,6 +26,7 @@ import AdminProductEdit from './pages/admin/ProductEdit';
 import AdminOrders from './pages/admin/Orders';
 import AdminOrderDetail from './pages/admin/OrderDetail';
 import AdminPickupLocations from './pages/admin/PickupLocations';
+import AdminHomepage from './pages/admin/Homepage';
 import Pickup from './pages/Pickup';
 
 // Local-only playground for the 3D shirt studio; stripped from production builds.
@@ -69,6 +70,7 @@ function AppShell() {
 
         {/* Admin Routes */}
         <Route path="/admin/pickup-locations" element={<ProtectedRoute admin><AdminPickupLocations /></ProtectedRoute>} />
+        <Route path="/admin/homepage" element={<ProtectedRoute admin><AdminHomepage /></ProtectedRoute>} />
         <Route path="/admin" element={<ProtectedRoute admin><AdminDashboard /></ProtectedRoute>} />
         <Route path="/admin/products" element={<ProtectedRoute admin><AdminProducts /></ProtectedRoute>} />
         <Route path="/admin/products/new" element={<ProtectedRoute admin><AdminProductEdit /></ProtectedRoute>} />
