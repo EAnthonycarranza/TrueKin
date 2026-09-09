@@ -619,7 +619,7 @@ export default function AdminProductEdit() {
                 <div className="tk-editor-info">
                   <span className="tk-editor-name">2D Mockup Studio</span>
                   <span className="tk-editor-desc">
-                    Front/back flat mockups — lighter, faster, no 3D model needed.
+                    Flat mockups for front, back and both sleeves — lighter, faster, no 3D model needed.
                   </span>
                 </div>
                 {editorType === '2d' && <span className="tk-editor-badge">Selected</span>}

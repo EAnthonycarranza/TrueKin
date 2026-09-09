@@ -12,7 +12,7 @@
  *   - Color picker for shapes and text
  *   - Front/back editing with live preview
  */
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import * as fabric from 'fabric';
 import {
   Camera, Save, ImagePlus, Type, Palette, Trash2, XCircle,
@@ -25,10 +25,10 @@ import {
 import FabricCanvas from './FabricCanvas';
 import { dataURLToBlob, loadFabricAssetImage, loadFabricImageFromFile } from './designerHelpers';
 import { attachSnapping } from '../shirt3d/snapping';
-import { PRINT_AREA } from '../shirt3d/printArea';
+import { PRINT_AREA, VIEWS, VIEW_IDS, SLEEVE_VIEW_IDS, viewInfo, sleeveZoneCanvas, getPrintRectPx } from '../shirt3d/printArea';
 import ColorWheel from '../shirt3d/ColorWheel';
-import { buildMockupUrl } from '../shirt3d/mockupTint';
-import { presetKeyFor, SHIRT_COLOR_NAMES } from '../shirt3d/shirtColor';
+import { buildMockupUrl, buildSleeveMockupUrl } from '../shirt3d/mockupTint';
+import { presetKeyFor, SHIRT_COLOR_NAMES, useFabricColor } from '../shirt3d/shirtColor';
 import {
   canonicalColor, defaultPalette, loadStoredPalette, storePalette,
   swatchDisplayColor, isLight,
@@ -356,6 +356,9 @@ function renderCurvedText({ text, font, fontSize, fill, curve, strokeColor, stro
 /* ═══════════════════════════════════════════════════════════════
    TOOL TABS
    ═══════════════════════════════════════════════════════════════ */
+/** Sleeve print zones as canvas fractions — same geometry the 3D studio uses. */
+const SLEEVE_AREAS = Object.fromEntries(SLEEVE_VIEW_IDS.map((id) => [id, sleeveZoneCanvas(id)]));
+
 const TOOL_TABS = [
   { id: 'text', label: 'Text', Icon: Type },
   { id: 'clipart', label: 'Assets', Icon: Sticker },
@@ -426,6 +429,28 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
   // tee, which is async — so the mockup URLs live in state rather than being
   // read straight from getMockupUrl().
   const [mockups, setMockups] = useState({ front: null, back: null });
+  const [sleeveMockups, setSleeveMockups] = useState({ left: null, right: null });
+
+  // The sleeve reference is the side-view photo re-shaded to the *fabric*
+  // colour — the colour the tee actually photographs as, not the nominal hex —
+  // which is what the 3D studio paints its sleeves with.
+  const fabricColor = useFabricColor(tshirtColor, 'front');
+
+  useEffect(() => {
+    let alive = true;
+    Promise.all([buildSleeveMockupUrl(fabricColor, 'left'), buildSleeveMockupUrl(fabricColor, 'right')])
+      .then(([left, right]) => { if (alive) setSleeveMockups({ left, right }); })
+      .catch(() => { /* keep the previous sleeve mockups */ });
+    return () => { alive = false; };
+  }, [fabricColor]);
+
+  /** Print zone for a view: the chest rectangle, or the sleeve's own zone. */
+  const areaFor = useCallback(
+    (id) => (viewInfo(id).kind === 'sleeve' ? SLEEVE_AREAS[id] || null : PRINT_AREA),
+    [],
+  );
+  const areaForRef = useRef(areaFor);
+  useEffect(() => { areaForRef.current = areaFor; }, [areaFor]);
 
   useEffect(() => { storePalette(palette); }, [palette]);
 
@@ -491,7 +516,7 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
   const handleCanvasReady = useCallback((canvas, view) => {
     detachRef.current[view]?.();
     detachRef.current[view] = attachSnapping(canvas, {
-      getArea: () => PRINT_AREA,
+      getArea: () => areaForRef.current(view),
       isEnabled: () => snapRef.current,
       onGuides: (g) => {
         const el = guidesRef.current[view];
@@ -509,12 +534,19 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
   }, []);
 
   // --- 2D preview thumbnails ---
-  const [frontPreviewURL, setFrontPreviewURL] = useState(null);
-  const [backPreviewURL, setBackPreviewURL] = useState(null);
+  // Keyed by view id so sleeves get thumbnails too.
+  const [previewURLs, setPreviewURLs] = useState({ front: null, back: null, left: null, right: null });
 
   // --- Refs ---
+  // One ref per design area. Sleeves are just two more views, so everything
+  // downstream (preview, snapshots, saved design) works by view id.
   const frontCanvasRef = useRef(null);
   const backCanvasRef = useRef(null);
+  const leftCanvasRef = useRef(null);
+  const rightCanvasRef = useRef(null);
+  const refs = useMemo(() => ({
+    front: frontCanvasRef, back: backCanvasRef, left: leftCanvasRef, right: rightCanvasRef,
+  }), []);
   const fileInputRef = useRef(null);
 
   // --- Load saved design ---
@@ -527,20 +559,24 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
       setTimeout(() => {
         if (data.frontObjects && frontCanvasRef.current) frontCanvasRef.current.loadObjects(data.frontObjects);
         if (data.backObjects && backCanvasRef.current) backCanvasRef.current.loadObjects(data.backObjects);
+        // Older designs have no sleeveObjects; those views simply stay empty.
+        for (const id of SLEEVE_VIEW_IDS) {
+          const objs = data.sleeveObjects?.[id];
+          if (objs && refs[id].current) refs[id].current.loadObjects(objs);
+        }
       }, 300);
     } catch { /* invalid data */ }
-    // setTshirtColor is a stable useCallback([]) — listed to satisfy the rule.
-  }, [designData, setTshirtColor]);
+    // setTshirtColor and refs are stable (useCallback([]) / useMemo([])) —
+    // listed to satisfy the rule.
+  }, [designData, setTshirtColor, refs]);
 
   // --- Preview updates ---
   const updatePreview = useCallback((view) => {
-    const ref = view === 'front' ? frontCanvasRef : backCanvasRef;
-    const setter = view === 'front' ? setFrontPreviewURL : setBackPreviewURL;
-    if (ref.current) {
-      const dataURL = ref.current.getSnapshotDataURL();
-      if (dataURL) setter(dataURL);
-    }
-  }, []);
+    const ref = refs[view];
+    if (!ref?.current) return;
+    const dataURL = ref.current.getSnapshotDataURL();
+    if (dataURL) setPreviewURLs((prev) => ({ ...prev, [view]: dataURL }));
+  }, [refs]);
 
   const handleDesignChange = useCallback((view) => {
     setTimeout(() => updatePreview(view), 150);
@@ -548,7 +584,7 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
 
   useEffect(() => {
     // Delay enough for the mockup image to decode before we snapshot it
-    const timer = setTimeout(() => { updatePreview('front'); updatePreview('back'); }, 600);
+    const timer = setTimeout(() => { VIEW_IDS.forEach(updatePreview); }, 600);
     return () => clearTimeout(timer);
   }, [tshirtColor, updatePreview]);
 
@@ -612,13 +648,36 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
     }
   }, []);
 
-  const activeCanvasRef = selectedView === 'front' ? frontCanvasRef : backCanvasRef;
+  const activeCanvasRef = refs[selectedView] || frontCanvasRef;
 
   // ─── ACTIONS ───────────────────────────────────────────────
 
+  /**
+   * Drop a new object into the middle of the *print zone* — not the middle of
+   * the canvas. On the front and back those are near enough the same place, but
+   * a sleeve zone sits high and off to one side, so a canvas-centred object
+   * lands outside the clip path and is never drawn. New art is also shrunk to
+   * fit the zone, which matters most on sleeves: they are a fraction of the
+   * chest area, and anything chest-sized would arrive fully clipped.
+   */
   const addToCanvas = (obj) => {
     const canvas = activeCanvasRef.current?.getCanvas();
-    if (!canvas) return;
+    const area = areaFor(selectedView);
+    if (!canvas || !area) return;
+    const rect = getPrintRectPx(canvas.width, canvas.height, area);
+    const maxW = rect.width * 0.9;
+    const maxH = rect.height * 0.9;
+    const w = obj.getScaledWidth?.() ?? obj.width ?? 0;
+    const h = obj.getScaledHeight?.() ?? obj.height ?? 0;
+    if (w > maxW || h > maxH) {
+      obj.scale((obj.scaleX || 1) * Math.min(maxW / (w || 1), maxH / (h || 1)));
+    }
+    obj.set({
+      originX: 'center',
+      originY: 'center',
+      left: rect.left + rect.width / 2,
+      top: rect.top + rect.height / 2,
+    });
     canvas.add(obj);
     canvas.setActiveObject(obj);
     canvas.renderAll();
@@ -630,19 +689,9 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
     e.target.value = '';
     if (!file) return;
     try {
-      const img = await loadFabricImageFromFile(fabric, file);
-      const maxW = CANVAS_CONFIG.width * 0.5;
-      const maxH = CANVAS_CONFIG.height * 0.5;
-      if (img.width > maxW || img.height > maxH) {
-        img.scale(Math.min(maxW / img.width, maxH / img.height));
-      }
-      const canvas = activeCanvasRef.current?.getCanvas();
-      if (!canvas) return;
-      img.set({
-        left: (canvas.width - img.getScaledWidth()) / 2,
-        top: (canvas.height - img.getScaledHeight()) / 2,
-      });
-      addToCanvas(img);
+      // Position and fit are handled by addToCanvas, which centres on the
+      // active view's print zone.
+      addToCanvas(await loadFabricImageFromFile(fabric, file));
     } catch (error) {
       console.warn(error);
     }
@@ -677,9 +726,8 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
     const text = new fabric.Textbox(config.text, {
       ...DEFAULT_TEXT_CONFIG,
       ...config,
-      left: canvas.width / 2,
-      top: canvas.height / 2,
-      width: 200,
+      width: Math.round(CANVAS_CONFIG.width * (areaFor(selectedView) || PRINT_AREA).w * 0.9),
+      textAlign: 'center',
       editable: false,
     });
     addToCanvas(text);
@@ -689,13 +737,7 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
     const canvas = activeCanvasRef.current?.getCanvas();
     if (!canvas) return;
     const obj = shapeDef.create(fabric);
-    obj.set({
-      fill: shapeFill,
-      originX: 'center',
-      originY: 'center',
-      left: canvas.width / 2,
-      top: canvas.height / 2,
-    });
+    obj.set({ fill: shapeFill });
     addToCanvas(obj);
   };
 
@@ -711,17 +753,7 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
 
     if (item.src) {
       try {
-        const image = await loadFabricAssetImage(fabric, item.src);
-        const maxW = CANVAS_CONFIG.width * 0.58;
-        const maxH = CANVAS_CONFIG.height * 0.58;
-        if (image.width > maxW || image.height > maxH) {
-          image.scale(Math.min(maxW / image.width, maxH / image.height));
-        }
-        image.set({
-          left: (canvas.width - image.getScaledWidth()) / 2,
-          top: (canvas.height - image.getScaledHeight()) / 2,
-        });
-        addToCanvas(image);
+        addToCanvas(await loadFabricAssetImage(fabric, item.src));
       } catch (error) {
         console.warn(error);
       }
@@ -732,8 +764,6 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
       fill: item.fill || '#000',
       stroke: item.stroke || '',
       strokeWidth: item.strokeWidth || 0,
-      left: 170,
-      top: 190,
       scaleX: 1.2,
       scaleY: 1.2,
       strokeLineJoin: 'round',
@@ -757,12 +787,6 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
       const canvas = activeCanvasRef.current?.getCanvas();
       if (!canvas) return;
       const img = new fabric.Image(imgEl);
-      const maxW = CANVAS_CONFIG.width * 0.6;
-      if (img.width > maxW) img.scale(maxW / img.width);
-      img.set({
-        left: (canvas.width - img.getScaledWidth()) / 2,
-        top: (canvas.height - img.getScaledHeight()) / 2,
-      });
       // Store curve data so we can re-edit this curved text later
       img._curveData = curveData;
       addToCanvas(img);
@@ -979,11 +1003,21 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
   // --- Save/Export ---
   const getDesignState = useCallback(() => ({
     tshirtColor, editorType: '2d', shirtStyle: 'unisex',
-    frontObjects: frontCanvasRef.current?.getObjects() || [],
-    backObjects: backCanvasRef.current?.getObjects() || [],
-    frontTexture: frontCanvasRef.current?.getTextureDataURL() || null,
-    backTexture: backCanvasRef.current?.getTextureDataURL() || null,
-  }), [tshirtColor]);
+    // front/back keep their original top-level keys so designs saved before
+    // sleeves existed still load, and so the customer preview keeps working.
+    frontObjects: refs.front.current?.getObjects() || [],
+    backObjects: refs.back.current?.getObjects() || [],
+    frontTexture: refs.front.current?.getTextureDataURL() || null,
+    backTexture: refs.back.current?.getTextureDataURL() || null,
+    sleeveObjects: {
+      left: refs.left.current?.getObjects() || [],
+      right: refs.right.current?.getObjects() || [],
+    },
+    sleeveTextures: {
+      left: refs.left.current?.getTextureDataURL() || null,
+      right: refs.right.current?.getTextureDataURL() || null,
+    },
+  }), [tshirtColor, refs]);
 
   const handleCapture2D = () => {
     setCapturing2D(true);
@@ -997,10 +1031,14 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
   const handleCaptureBoth = () => {
     setCapturing2D(true);
     try {
-      const f = frontCanvasRef.current?.getSnapshotDataURL();
-      if (f && onSnapshot) onSnapshot(dataURLToBlob(f), getDesignState());
-      const b = backCanvasRef.current?.getSnapshotDataURL();
-      if (b && onSnapshot) onSnapshot(dataURLToBlob(b), getDesignState());
+      // Every area that actually has artwork on it — a blank sleeve should not
+      // become a product photo.
+      for (const id of VIEW_IDS) {
+        const canvas = refs[id].current;
+        if (!canvas || !canvas.getObjects()?.length) continue;
+        const url = canvas.getSnapshotDataURL();
+        if (url && onSnapshot) onSnapshot(dataURLToBlob(url), getDesignState());
+      }
     } catch { /* */ } finally { setCapturing2D(false); }
   };
 
@@ -1515,18 +1553,18 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
           <section className="tk-studio-control-group" aria-label="Design area">
             <div className="tk-studio-control-heading">
               <span className="tk-studio-control-kicker">Design area</span>
-              <span className="tk-studio-control-value">{selectedView === 'front' ? 'Front' : 'Back'}</span>
+              <span className="tk-studio-control-value">{viewInfo(selectedView).label}</span>
             </div>
             <div className="tk-studio-view-tabs">
-              {['front', 'back'].map((v) => (
+              {VIEWS.map((v) => (
                 <button
-                  key={v}
+                  key={v.id}
                   type="button"
-                  onClick={() => handleViewChange(v)}
-                  className={`tk-studio-view-tab${selectedView === v ? ' is-active' : ''}`}
-                  aria-pressed={selectedView === v}
+                  onClick={() => handleViewChange(v.id)}
+                  className={`tk-studio-view-tab${selectedView === v.id ? ' is-active' : ''}`}
+                  aria-pressed={selectedView === v.id}
                 >
-                  {v.charAt(0).toUpperCase() + v.slice(1)}
+                  {v.label}
                 </button>
               ))}
             </div>
@@ -1668,27 +1706,45 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
       <div className="tk-studio-stage" style={s.stage}>
         <div className="tk-studio-pane" style={s.pane}>
           <div className="tk-studio-pane-head" style={s.paneHead}>
-            <Layers size={13} /> 2D · {selectedView === 'front' ? 'Front' : 'Back'} · Studio photo
+            <Layers size={13} /> 2D · {viewInfo(selectedView).label} ·{' '}
+            {viewInfo(selectedView).kind === 'sleeve'
+              ? 'side photo'
+              : (presetKeyFor(tshirtColor) ? 'studio photo' : 'tinted mockup')}
           </div>
           <div className="tk-studio-canvas-wrap" style={{ ...s.canvasWrap, position: 'relative' }}>
-            <div style={{ ...s.canvasBox, display: selectedView === 'front' ? 'block' : 'none' }}>
-              <FabricCanvas ref={frontCanvasRef} svgPath={TSHIRT_FRONT_PATH} tshirtColor={tshirtColor} view="front"
-                mockupUrl={mockups.front} preColored={true}
-                onCanvasReady={handleCanvasReady}
-                onObjectSelect={selectedView === 'front' ? handleObjectSelect : undefined}
-                onDesignChange={handleDesignChange} />
-              <div ref={(el) => { guidesRef.current.front = { ...(guidesRef.current.front || {}), x: el }; }} style={s.guideX} />
-              <div ref={(el) => { guidesRef.current.front = { ...(guidesRef.current.front || {}), y: el }; }} style={s.guideY} />
-            </div>
-            <div style={{ ...s.canvasBox, display: selectedView === 'back' ? 'block' : 'none' }}>
-              <FabricCanvas ref={backCanvasRef} svgPath={TSHIRT_BACK_PATH} tshirtColor={tshirtColor} view="back"
-                mockupUrl={mockups.back} preColored={true}
-                onCanvasReady={handleCanvasReady}
-                onObjectSelect={selectedView === 'back' ? handleObjectSelect : undefined}
-                onDesignChange={handleDesignChange} />
-              <div ref={(el) => { guidesRef.current.back = { ...(guidesRef.current.back || {}), x: el }; }} style={s.guideX} />
-              <div ref={(el) => { guidesRef.current.back = { ...(guidesRef.current.back || {}), y: el }; }} style={s.guideY} />
-            </div>
+            {VIEW_IDS.map((id) => {
+              const isSleeve = viewInfo(id).kind === 'sleeve';
+              const url = isSleeve ? sleeveMockups[id] : mockups[id];
+              const area = areaFor(id);
+              const shown = selectedView === id;
+              // The sleeve reference is generated from the side photo, so it can
+              // lag the first paint; show a placeholder rather than a bare canvas.
+              if (isSleeve && (!url || !area)) {
+                return (
+                  <div key={id} style={{ ...s.canvasBox, display: shown ? 'flex' : 'none', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 13 }}>
+                    Preparing the {viewInfo(id).label.toLowerCase()} mockup…
+                  </div>
+                );
+              }
+              return (
+                <div key={id} style={{ ...s.canvasBox, display: shown ? 'block' : 'none' }}>
+                  <FabricCanvas
+                    ref={refs[id]}
+                    svgPath={id === 'back' ? TSHIRT_BACK_PATH : TSHIRT_FRONT_PATH}
+                    tshirtColor={tshirtColor}
+                    view={id}
+                    mockupUrl={url}
+                    printArea={area}
+                    preColored={true}
+                    onCanvasReady={handleCanvasReady}
+                    onObjectSelect={shown ? handleObjectSelect : undefined}
+                    onDesignChange={handleDesignChange}
+                  />
+                  <div ref={(el) => { guidesRef.current[id] = { ...(guidesRef.current[id] || {}), x: el }; }} style={s.guideX} />
+                  <div ref={(el) => { guidesRef.current[id] = { ...(guidesRef.current[id] || {}), y: el }; }} style={s.guideY} />
+                </div>
+              );
+            })}
 
             {/* Floating delete bar — appears over the canvas when objects are selected */}
             {selectedObject && (
@@ -1707,24 +1763,29 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
 
         <div className="tk-studio-pane" style={s.pane}>
           <div className="tk-studio-pane-head" style={{ ...s.paneHead, width: 'auto' }}>
-            <Eye size={13} /> Preview · Both sides
+            <Eye size={13} /> Preview · All views
           </div>
           <div style={s.previewPane}>
-            {[['front', frontPreviewURL], ['back', backPreviewURL]].map(([view, url]) => (
-              <button
-                key={view}
-                type="button"
-                onClick={() => handleViewChange(view)}
-                aria-pressed={selectedView === view}
-                style={{
-                  ...s.previewThumb,
-                  outline: selectedView === view ? '2px solid var(--ink, #0a0a0a)' : '1px solid #e5e7eb',
-                }}
-              >
-                {url ? <img src={url} alt={`${view} preview`} style={s.previewImg} /> : <span style={s.previewPlaceholder}>{view}</span>}
-                <span style={s.previewLabel}>{view.charAt(0).toUpperCase() + view.slice(1)}</span>
-              </button>
-            ))}
+            {VIEW_IDS.map((id) => {
+              const url = previewURLs[id];
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => handleViewChange(id)}
+                  aria-pressed={selectedView === id}
+                  style={{
+                    ...s.previewThumb,
+                    outline: selectedView === id ? '2px solid var(--ink, #0a0a0a)' : '1px solid #e5e7eb',
+                  }}
+                >
+                  {url
+                    ? <img src={url} alt={`${viewInfo(id).label} preview`} style={s.previewImg} />
+                    : <span style={s.previewPlaceholder}>{viewInfo(id).label}</span>}
+                  <span style={s.previewLabel}>{viewInfo(id).label}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
