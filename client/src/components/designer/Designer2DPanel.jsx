@@ -20,11 +20,20 @@ import {
   Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight,
   Layers, CopyPlus, FlipHorizontal2, FlipVertical2,
   ArrowUpToLine, ArrowDownToLine, Sparkles, CircleDot,
-  Sticker,
+  Sticker, Magnet, Pencil, Pipette, Check, X, Plus, RotateCcw, Users,
 } from 'lucide-react';
 import FabricCanvas from './FabricCanvas';
 import { dataURLToBlob, loadFabricAssetImage, loadFabricImageFromFile } from './designerHelpers';
-import { getMockupUrl } from './designerMockups';
+import { attachSnapping } from '../shirt3d/snapping';
+import { PRINT_AREA } from '../shirt3d/printArea';
+import ColorWheel from '../shirt3d/ColorWheel';
+import { buildMockupUrl } from '../shirt3d/mockupTint';
+import { presetKeyFor, SHIRT_COLOR_NAMES } from '../shirt3d/shirtColor';
+import {
+  canonicalColor, defaultPalette, loadStoredPalette, storePalette,
+  swatchDisplayColor, isLight,
+} from '../shirt3d/palette';
+import '../shirt3d/Shirt3DStudio.css';
 import {
   CANVAS_CONFIG, TSHIRT_FRONT_PATH, TSHIRT_BACK_PATH, TSHIRT_COLORS,
   DEFAULT_TEXT_CONFIG, FONT_OPTIONS, FONT_CATEGORIES,
@@ -359,7 +368,13 @@ const TOOL_TABS = [
    ═══════════════════════════════════════════════════════════════ */
 export default function Designer2DPanel({ designData, onSave, onSnapshot, saving = false }) {
   // --- Core state ---
-  const [tshirtColor, setTshirtColor] = useState('#FFFFFF');
+  const [tshirtColor, setTshirtColorRaw] = useState('#FFFFFF');
+  // Normalise every colour the same way the 3D studio does, so a hex typed in
+  // the wheel and a preset swatch compare equal.
+  const setTshirtColor = useCallback((hex) => {
+    const c = canonicalColor(hex);
+    if (c) setTshirtColorRaw(c);
+  }, []);
   const [selectedView, setSelectedView] = useState('front');
   const [selectedObject, setSelectedObject] = useState(null);
   const [capturing2D, setCapturing2D] = useState(false);
@@ -402,6 +417,97 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
   const [clipCategory, setClipCategory] = useState(CLIPART_CATEGORIES[0]?.name || 'Studio Picks');
   const [fontFilter, setFontFilter] = useState('all');
 
+  // --- Shirt colour ---
+  // The same stored palette the 3D studio uses, so a custom swatch created in
+  // one editor is the same swatch in the other.
+  const [palette, setPalette] = useState(() => loadStoredPalette() || defaultPalette());
+  const [picker, setPicker] = useState(null); // null | { mode: 'new' | 'edit', index }
+  // Preset colours have a studio photo; any other hex is tinted from the white
+  // tee, which is async — so the mockup URLs live in state rather than being
+  // read straight from getMockupUrl().
+  const [mockups, setMockups] = useState({ front: null, back: null });
+
+  useEffect(() => { storePalette(palette); }, [palette]);
+
+  useEffect(() => {
+    let alive = true;
+    Promise.all([buildMockupUrl(tshirtColor, 'front'), buildMockupUrl(tshirtColor, 'back')])
+      .then(([front, back]) => { if (alive) setMockups({ front, back }); })
+      .catch(() => { /* keep the previous mockups on failure */ });
+    return () => { alive = false; };
+  }, [tshirtColor]);
+
+  const isCustomColor = !presetKeyFor(tshirtColor);
+  const selectedIndex = palette.findIndex((e) => e.hex === tshirtColor);
+  const currentColorName = presetKeyFor(tshirtColor)
+    ? (SHIRT_COLOR_NAMES[presetKeyFor(tshirtColor)] || tshirtColor)
+    : `Custom ${tshirtColor}`;
+
+  const openPicker = (mode, index) => {
+    if (mode === 'edit' && palette[index]) setTshirtColor(palette[index].hex);
+    setPicker({ mode, index });
+  };
+  const addSwatch = () => {
+    setPalette((p) => (p.some((e) => e.hex === tshirtColor) ? p : [...p, { hex: tshirtColor, preset: null }]));
+    setPicker(null);
+  };
+  const updateSwatch = () => {
+    setPalette((p) => p.map((e, i) => (i === picker?.index ? { ...e, hex: tshirtColor } : e)));
+    setPicker(null);
+  };
+  const restoreSwatch = () => {
+    const entry = palette[picker?.index];
+    if (!entry?.preset) return;
+    setPalette((p) => p.map((e, i) => (i === picker.index ? { ...e, hex: e.preset } : e)));
+    setTshirtColor(entry.preset);
+    setPicker(null);
+  };
+  const removeSwatch = () => {
+    setPalette((p) => (p.length > 1 ? p.filter((_, i) => i !== picker?.index) : p));
+    setPicker(null);
+  };
+  const resetPalette = () => { setPalette(defaultPalette()); setPicker(null); };
+
+  // --- Snapping ---
+  // Shares the 'truking.snap' key with the 3D studio so the preference follows
+  // the user between the two editors rather than being set twice.
+  const [snapOn, setSnapOn] = useState(() => {
+    try { return window.localStorage.getItem('truking.snap') !== 'off'; } catch { return true; }
+  });
+  const snapRef = useRef(snapOn);
+  const guidesRef = useRef({});   // view id -> { x: HTMLElement, y: HTMLElement }
+  const detachRef = useRef({});   // view id -> detach()
+
+  useEffect(() => {
+    snapRef.current = snapOn;
+    try { window.localStorage.setItem('truking.snap', snapOn ? 'on' : 'off'); } catch { /* private mode */ }
+  }, [snapOn]);
+
+  /**
+   * Magnetic alignment, same module the 3D studio uses: elements catch the
+   * print zone's edges/centre and other elements' edges/centres, and rotation
+   * locks to the 45 degree family then 15 degree steps.
+   */
+  const handleCanvasReady = useCallback((canvas, view) => {
+    detachRef.current[view]?.();
+    detachRef.current[view] = attachSnapping(canvas, {
+      getArea: () => PRINT_AREA,
+      isEnabled: () => snapRef.current,
+      onGuides: (g) => {
+        const el = guidesRef.current[view];
+        if (!el) return;
+        if (el.x) { el.x.style.display = g?.x != null ? 'block' : 'none'; if (g?.x != null) el.x.style.left = `${g.x}px`; }
+        if (el.y) { el.y.style.display = g?.y != null ? 'block' : 'none'; if (g?.y != null) el.y.style.top = `${g.y}px`; }
+      },
+    });
+  }, []);
+
+  // Detach on unmount so listeners never outlive the panel.
+  useEffect(() => {
+    const detachers = detachRef.current;
+    return () => { Object.values(detachers).forEach((fn) => fn?.()); };
+  }, []);
+
   // --- 2D preview thumbnails ---
   const [frontPreviewURL, setFrontPreviewURL] = useState(null);
   const [backPreviewURL, setBackPreviewURL] = useState(null);
@@ -423,7 +529,8 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
         if (data.backObjects && backCanvasRef.current) backCanvasRef.current.loadObjects(data.backObjects);
       }, 300);
     } catch { /* invalid data */ }
-  }, [designData]);
+    // setTshirtColor is a stable useCallback([]) — listed to satisfy the rule.
+  }, [designData, setTshirtColor]);
 
   // --- Preview updates ---
   const updatePreview = useCallback((view) => {
@@ -1401,176 +1508,232 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
   // ═══════════════════════════════════════════════════════════════
 
   return (
-    <div style={s.wrapper}>
-      {/* ─── LEFT: Preview Column ─── */}
-      <div style={s.leftColumn}>
-        <div style={s.previewHeader}>
-          <Eye size={14} style={{ color: '#666' }} />
-          <span style={{ fontWeight: 600, fontSize: 13 }}>Preview</span>
+    <div className="tk-studio" style={s.root}>
+      {/* Command bar — same shell and classes as the 3D studio */}
+      <div className="tk-studio-command-bar">
+        <div className="tk-studio-command-row tk-studio-command-row-primary">
+          <section className="tk-studio-control-group" aria-label="Design area">
+            <div className="tk-studio-control-heading">
+              <span className="tk-studio-control-kicker">Design area</span>
+              <span className="tk-studio-control-value">{selectedView === 'front' ? 'Front' : 'Back'}</span>
+            </div>
+            <div className="tk-studio-view-tabs">
+              {['front', 'back'].map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => handleViewChange(v)}
+                  className={`tk-studio-view-tab${selectedView === v ? ' is-active' : ''}`}
+                  aria-pressed={selectedView === v}
+                >
+                  {v.charAt(0).toUpperCase() + v.slice(1)}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="tk-studio-control-group tk-studio-colour-group" aria-label="Shirt color">
+            <div className="tk-studio-control-heading">
+              <span className="tk-studio-control-kicker">Shirt color</span>
+              <span className="tk-studio-control-value">{currentColorName}</span>
+            </div>
+            <div className="tk-studio-swatches">
+              <Palette size={16} aria-hidden="true" />
+              {palette.map((entry, i) => {
+                const display = swatchDisplayColor(entry);
+                const on = entry.hex === tshirtColor;
+                const label = entry.hex === entry.preset
+                  ? `${SHIRT_COLOR_NAMES[entry.preset] || entry.preset} · studio photo (${display})`
+                  : `${entry.hex} · custom (tinted)`;
+                return (
+                  <button
+                    key={`${i}-${entry.hex}`}
+                    type="button"
+                    onClick={() => setTshirtColor(entry.hex)}
+                    onDoubleClick={() => openPicker('edit', i)}
+                    title={`${label} — double-click to edit`}
+                    aria-label={label}
+                    aria-pressed={on}
+                    className={`tk-studio-swatch${on ? ' is-active' : ''}`}
+                    style={{ backgroundColor: display }}
+                  >
+                    {on && <Check size={13} strokeWidth={3} color={isLight(display) ? '#111' : '#fff'} />}
+                  </button>
+                );
+              })}
+              {selectedIndex >= 0 && (
+                <button type="button" onClick={() => openPicker('edit', selectedIndex)} title="Edit selected color" aria-label="Edit selected color" className="tk-studio-icon-action">
+                  <Pencil size={15} />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => (picker?.mode === 'new' ? setPicker(null) : openPicker('new'))}
+                title="Create a custom shirt color"
+                className={`tk-studio-compact-action${picker?.mode === 'new' || (isCustomColor && selectedIndex < 0) ? ' is-active' : ''}`}
+                aria-pressed={picker?.mode === 'new' || (isCustomColor && selectedIndex < 0)}
+              >
+                <Pipette size={15} /> <span>Custom</span>
+              </button>
+            </div>
+          </section>
         </div>
 
-        {[['front', frontPreviewURL], ['back', backPreviewURL]].map(([view, url]) => (
-          <div
-            key={view}
-            style={{
-              ...s.previewThumb,
-              outline: selectedView === view ? '2px solid var(--accent)' : '1px solid #e5e7eb',
-            }}
-            onClick={() => handleViewChange(view)}
-          >
-            {url ? <img src={url} alt={`${view} preview`} style={s.previewImg} /> : <span style={s.previewPlaceholder}>{view}</span>}
-            <span style={s.previewLabel}>{view.charAt(0).toUpperCase() + view.slice(1)}</span>
+        <div className="tk-studio-command-row tk-studio-command-row-tools">
+          <div className="tk-studio-add-tools" aria-label="Add to design">
+            <span className="tk-studio-control-kicker">Add to design</span>
+            {TOOL_TABS.map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setActiveToolTab(activeToolTab === id ? null : id)}
+                className={`tk-studio-tool-action${activeToolTab === id ? ' is-active' : ''}`}
+                aria-pressed={activeToolTab === id}
+              >
+                <Icon size={16} /> <span>{label}</span>
+              </button>
+            ))}
           </div>
-        ))}
-
-        <div style={s.actions}>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={handleDownload} style={s.actionBtnSmall} title="Download PNG">
-            <Download size={14} /> Download
-          </button>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={handleCapture2D} disabled={capturing2D} style={s.actionBtnSmall}>
-            <Camera size={14} /> Snapshot
-          </button>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={handleCaptureBoth} disabled={capturing2D} style={s.actionBtnSmall}>
-            <Camera size={14} /> Both Sides
-          </button>
-          <button type="button" className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving} style={s.actionBtnSmall}>
-            <Save size={14} /> {saving ? 'Saving...' : 'Save Design'}
-          </button>
+          <div className="tk-studio-utility-tools" aria-label="Canvas tools">
+            <span style={s.unisexSeal} title="Unisex fit only — Truekin tees are cut on one unisex last">
+              <Users size={13} /> Unisex Fit
+            </span>
+            <button
+              type="button"
+              onClick={() => setSnapOn((v) => !v)}
+              aria-pressed={snapOn}
+              title={snapOn ? 'Snapping on: elements lock to guides and rotation to 15° steps' : 'Snapping off'}
+              className={`tk-studio-utility-action${snapOn ? ' is-active' : ''}`}
+            >
+              <Magnet size={15} /> <span>Snap</span><span className="tk-studio-on-dot" aria-hidden="true" />
+            </button>
+            <button type="button" onClick={handleDeleteSelected} disabled={!selectedObject} title="Delete selected" className="tk-studio-utility-action tk-studio-danger-action">
+              <Trash2 size={15} /> <span>Delete</span>
+            </button>
+            <button type="button" onClick={handleClearAll} title="Clear this view" className="tk-studio-utility-action">
+              <XCircle size={15} /> <span>Clear view</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* ─── RIGHT: Canvas + Tools ─── */}
-      <div style={s.rightColumn}>
-        {/* View toggle */}
-        <div style={s.viewToggle}>
-          {['front', 'back'].map((v) => (
-            <button key={v} type="button" onClick={() => handleViewChange(v)}
-              className={`btn ${selectedView === v ? 'btn-primary' : 'btn-secondary'} btn-sm`}
-              style={{ flex: 1 }}>
-              {v.charAt(0).toUpperCase() + v.slice(1)}
-            </button>
-          ))}
-        </div>
-
-        {/* Tool Tabs */}
-        <div style={s.toolTabBar}>
-          {TOOL_TABS.map(({ id, label, Icon }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setActiveToolTab(activeToolTab === id ? null : id)}
-              style={{
-                ...s.toolTab,
-                background: activeToolTab === id ? 'var(--accent)' : 'transparent',
-                color: activeToolTab === id ? '#fff' : '#555',
-              }}
-            >
-              <Icon size={14} />
-              <span style={{ fontSize: 11 }}>{label}</span>
-            </button>
-          ))}
-
-          <div style={{ flex: 1 }} />
-
-          {/* T-shirt color */}
-          <div style={s.colorPickerGroup}>
-            <Palette size={13} style={{ color: '#666' }} />
-            <div style={s.colorSwatches}>
-              {TSHIRT_COLORS.map((c) => (
-                <button key={c} type="button" onClick={() => setTshirtColor(c)} style={{
-                  ...s.colorSwatch,
-                  background: c,
-                  outline: tshirtColor === c ? '2px solid var(--accent)' : '1px solid #ddd',
-                  outlineOffset: 1,
-                }} />
-              ))}
+      {/* Colour picker popover */}
+      {picker && (
+        <div className="tk-studio-colour-popover" style={s.popover}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <strong style={{ fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              {picker.mode === 'edit' ? 'Edit swatch' : 'Custom colour'}
+            </strong>
+            <span style={{ ...s.matchDot, background: tshirtColor, width: 16, height: 16 }} />
+            <code style={{ fontSize: 12 }}>{tshirtColor}</code>
+            <button type="button" onClick={() => setPicker(null)} style={{ ...s.iconBtn, marginLeft: 'auto' }} title="Close"><X size={14} /></button>
+          </div>
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+            <ColorWheel value={tshirtColor} onChange={setTshirtColor} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 180, flex: 1 }}>
+              <p style={{ ...s.hint, margin: 0, display: 'block' }}>
+                {isCustomColor
+                  ? 'Custom colour: the white tee photo is re-shaded so the chest is exactly this hex.'
+                  : 'This hex has a studio photo, so the mockup uses the photo.'}
+              </p>
+              {picker.mode === 'new' ? (
+                <button type="button" className="btn btn-primary btn-sm" onClick={addSwatch}><Plus size={14} /> Add to palette</button>
+              ) : (
+                <>
+                  <button type="button" className="btn btn-primary btn-sm" onClick={updateSwatch}><Check size={14} /> Update swatch</button>
+                  {palette[picker.index]?.preset && palette[picker.index].hex !== palette[picker.index].preset && (
+                    <button type="button" className="btn btn-secondary btn-sm" onClick={restoreSwatch}><RotateCcw size={14} /> Restore photo colour</button>
+                  )}
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={removeSwatch} disabled={palette.length <= 1} style={{ color: '#b91c1c' }}><Trash2 size={14} /> Remove swatch</button>
+                </>
+              )}
+              <button type="button" onClick={resetPalette} style={{ ...s.chip, alignSelf: 'flex-start' }}>Reset palette to studio photos</button>
             </div>
           </div>
-
-          {/* Unisex fit seal — Truekin is unisex-only (no men's/women's split) */}
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '4px 10px',
-              background: 'var(--ink, #0a0a0a)',
-              color: '#f4f1ea',
-              fontFamily: 'var(--font-secondary, "Oswald", sans-serif)',
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: '0.2em',
-              textTransform: 'uppercase',
-              borderRadius: 3,
-              border: '1px solid #1f1f1f',
-            }}
-            title="Unisex fit only — Truekin tees are cut on one unisex last"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
-            Unisex Fit
-          </div>
-
-          {/* Delete & Clear */}
-          <button type="button" className="btn btn-secondary btn-sm" onClick={handleDeleteSelected} disabled={!selectedObject} title="Delete"
-            style={{ color: selectedObject ? '#dc2626' : undefined, padding: '4px 6px' }}>
-            <Trash2 size={14} />
-          </button>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={handleClearAll} title="Clear All" style={{ padding: '4px 6px' }}>
-            <XCircle size={14} />
-          </button>
         </div>
+      )}
 
         {/* Tool Panel (collapsible) */}
-        {activeToolTab && (
-          <div style={s.toolPanel}>
-            {activeToolTab === 'text' && renderTextPanel()}
-            {activeToolTab === 'clipart' && renderClipartPanel()}
-            {activeToolTab === 'image' && renderImagePanel()}
-            {activeToolTab === 'effects' && renderEffectsPanel()}
-          </div>
-        )}
+      {activeToolTab && (
+        <div style={s.toolPanel} className={`tk-studio-tool-drawer${activeToolTab === 'clipart' ? ' tk-studio-assets-panel' : ''}`}>
+          {activeToolTab === 'text' && renderTextPanel()}
+          {activeToolTab === 'clipart' && renderClipartPanel()}
+          {activeToolTab === 'image' && renderImagePanel()}
+          {activeToolTab === 'effects' && renderEffectsPanel()}
+        </div>
+      )}
 
-        {/* Canvas with floating delete bar */}
-        <div style={{ position: 'relative' }}>
-          <div style={s.fabricContainer}>
-            <div style={{ display: selectedView === 'front' ? 'block' : 'none' }}>
+      {/* Stage: the editable canvas beside the front/back preview, mirroring
+          the 3D studio's two-pane layout (which pairs 2D with the live 3D). */}
+      <div className="tk-studio-stage" style={s.stage}>
+        <div className="tk-studio-pane" style={s.pane}>
+          <div className="tk-studio-pane-head" style={s.paneHead}>
+            <Layers size={13} /> 2D · {selectedView === 'front' ? 'Front' : 'Back'} · Studio photo
+          </div>
+          <div className="tk-studio-canvas-wrap" style={{ ...s.canvasWrap, position: 'relative' }}>
+            <div style={{ ...s.canvasBox, display: selectedView === 'front' ? 'block' : 'none' }}>
               <FabricCanvas ref={frontCanvasRef} svgPath={TSHIRT_FRONT_PATH} tshirtColor={tshirtColor} view="front"
-                mockupUrl={getMockupUrl(tshirtColor, 'front')} preColored={true}
+                mockupUrl={mockups.front} preColored={true}
+                onCanvasReady={handleCanvasReady}
                 onObjectSelect={selectedView === 'front' ? handleObjectSelect : undefined}
                 onDesignChange={handleDesignChange} />
+              <div ref={(el) => { guidesRef.current.front = { ...(guidesRef.current.front || {}), x: el }; }} style={s.guideX} />
+              <div ref={(el) => { guidesRef.current.front = { ...(guidesRef.current.front || {}), y: el }; }} style={s.guideY} />
             </div>
-            <div style={{ display: selectedView === 'back' ? 'block' : 'none' }}>
+            <div style={{ ...s.canvasBox, display: selectedView === 'back' ? 'block' : 'none' }}>
               <FabricCanvas ref={backCanvasRef} svgPath={TSHIRT_BACK_PATH} tshirtColor={tshirtColor} view="back"
-                mockupUrl={getMockupUrl(tshirtColor, 'back')} preColored={true}
+                mockupUrl={mockups.back} preColored={true}
+                onCanvasReady={handleCanvasReady}
                 onObjectSelect={selectedView === 'back' ? handleObjectSelect : undefined}
                 onDesignChange={handleDesignChange} />
+              <div ref={(el) => { guidesRef.current.back = { ...(guidesRef.current.back || {}), x: el }; }} style={s.guideX} />
+              <div ref={(el) => { guidesRef.current.back = { ...(guidesRef.current.back || {}), y: el }; }} style={s.guideY} />
             </div>
-          </div>
 
-          {/* Floating delete bar — appears above the canvas when objects are selected */}
-          {selectedObject && (
-            <div style={s.floatingDeleteBar}>
-              <span style={{ fontSize: 12, color: '#fff', fontWeight: 500 }}>
-                {selectionCount > 1 ? `${selectionCount} objects selected` : '1 object selected'}
-              </span>
-              <button type="button" onClick={handleDeleteSelected} style={s.floatingDeleteBtn}>
-                <Trash2 size={15} />
-                Delete{selectionCount > 1 ? ` (${selectionCount})` : ''}
-              </button>
-            </div>
-          )}
+            {/* Floating delete bar — appears over the canvas when objects are selected */}
+            {selectedObject && (
+              <div style={s.floatingDeleteBar}>
+                <span style={{ fontSize: 12, color: '#fff', fontWeight: 500 }}>
+                  {selectionCount > 1 ? `${selectionCount} objects selected` : '1 object selected'}
+                </span>
+                <button type="button" onClick={handleDeleteSelected} style={s.floatingDeleteBtn}>
+                  <Trash2 size={15} />
+                  Delete{selectionCount > 1 ? ` (${selectionCount})` : ''}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Properties Panel (contextual) */}
-        {isTextSelected && renderTextProps()}
+        <div className="tk-studio-pane" style={s.pane}>
+          <div className="tk-studio-pane-head" style={{ ...s.paneHead, width: 'auto' }}>
+            <Eye size={13} /> Preview · Both sides
+          </div>
+          <div style={s.previewPane}>
+            {[['front', frontPreviewURL], ['back', backPreviewURL]].map(([view, url]) => (
+              <button
+                key={view}
+                type="button"
+                onClick={() => handleViewChange(view)}
+                aria-pressed={selectedView === view}
+                style={{
+                  ...s.previewThumb,
+                  outline: selectedView === view ? '2px solid var(--ink, #0a0a0a)' : '1px solid #e5e7eb',
+                }}
+              >
+                {url ? <img src={url} alt={`${view} preview`} style={s.previewImg} /> : <span style={s.previewPlaceholder}>{view}</span>}
+                <span style={s.previewLabel}>{view.charAt(0).toUpperCase() + view.slice(1)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
 
-        {/* Curved text properties when a curved text image is selected */}
-        {isCurvedTextSelected && renderCurvedTextProps()}
+      {/* Properties Panel (contextual) */}
+      {isTextSelected && renderTextProps()}
+
+      {/* Curved text properties when a curved text image is selected */}
+      {isCurvedTextSelected && renderCurvedTextProps()}
 
         {/* Shape/Line/Image properties when selected (but no text) */}
         {selectedObject && !isTextSelected && !isCurvedTextSelected && (
@@ -1616,7 +1779,22 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
           </div>
         )}
 
-        <p style={s.hint}>Click tool tabs above to add text, shapes, clip art, and images. Select objects to edit properties.</p>
+      <p style={s.hint}>Add text, assets, images and effects from the bar above. Select an element to edit its properties.</p>
+
+      {/* Actions */}
+      <div className="tk-studio-export-actions" style={s.actions}>
+        <button type="button" className="btn btn-primary btn-sm tk-studio-save-action" onClick={handleSave} disabled={saving}>
+          <Save size={14} /> {saving ? 'Saving…' : 'Save Design'}
+        </button>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={handleCapture2D} disabled={capturing2D}>
+          <Camera size={14} /> Capture 2D
+        </button>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={handleCaptureBoth} disabled={capturing2D}>
+          <Camera size={14} /> Capture Both Sides
+        </button>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={handleDownload}>
+          <Download size={14} /> Download PNG
+        </button>
       </div>
     </div>
   );
@@ -1632,7 +1810,8 @@ const s = {
   leftColumn: { display: 'flex', flexDirection: 'column', gap: 8 },
   previewHeader: { display: 'flex', alignItems: 'center', gap: 6, padding: '0 2px' },
   previewThumb: {
-    position: 'relative', borderRadius: 10, overflow: 'hidden', cursor: 'pointer',
+    position: 'relative', width: 150, flex: '0 0 auto', padding: 0,
+    borderRadius: 10, overflow: 'hidden', cursor: 'pointer', border: 'none',
     background: '#f9fafb', aspectRatio: '0.9', transition: 'outline-color 0.15s',
   },
   previewImg: { width: '100%', height: '100%', objectFit: 'contain' },
@@ -1644,7 +1823,7 @@ const s = {
     position: 'absolute', bottom: 0, left: 0, right: 0, textAlign: 'center',
     fontSize: 11, fontWeight: 600, color: '#555', background: 'rgba(255,255,255,0.85)', padding: '3px 0',
   },
-  actions: { display: 'flex', flexDirection: 'column', gap: 5, marginTop: 4 },
+  actions: { display: 'flex', flexWrap: 'wrap', gap: 8, paddingTop: 4 },
   actionBtnSmall: {
     width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, fontSize: 11,
   },
@@ -1652,6 +1831,28 @@ const s = {
   // Right column
   rightColumn: { display: 'flex', flexDirection: 'column', gap: 8 },
   viewToggle: { display: 'flex', gap: 6 },
+  root: { display: 'flex', flexDirection: 'column', gap: 10, fontFamily: 'inherit' },
+  stage: { display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'flex-start' },
+  pane: { display: 'flex', flexDirection: 'column', gap: 6 },
+  paneHead: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#555', width: CANVAS_CONFIG.width },
+  canvasWrap: { border: '1px solid #e5e5e5', borderRadius: 10, overflow: 'hidden', background: '#fff' },
+  previewPane: { display: 'flex', flexWrap: 'wrap', gap: 10 },
+  popover: { padding: 12, background: '#fff', border: '1px solid #e2ddd1', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.08)' },
+  matchDot: { width: 14, height: 14, borderRadius: 4, border: '1px solid rgba(0,0,0,0.15)', display: 'inline-block' },
+  iconBtn: { display: 'inline-flex', alignItems: 'center', padding: 6, borderRadius: 6, border: '1px solid transparent', background: 'transparent', cursor: 'pointer', color: '#444' },
+  chip: { display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', fontSize: 11, fontWeight: 600, borderRadius: 999, border: '1px solid #d4d4d4', background: '#fff', color: '#333', cursor: 'pointer' },
+  unisexSeal: {
+    display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px',
+    background: 'var(--ink, #0a0a0a)', color: '#f4f1ea', fontFamily: 'var(--font-secondary, "Oswald", sans-serif)',
+    fontSize: 10, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase',
+    borderRadius: 4, border: '1px solid #1f1f1f', whiteSpace: 'nowrap',
+  },
+
+  // Exactly the canvas footprint, so guide offsets (canvas px) map 1:1.
+  canvasBox: { position: 'relative', width: CANVAS_CONFIG.width, height: CANVAS_CONFIG.height },
+  guideX: { display: 'none', position: 'absolute', top: 0, bottom: 0, width: 0, borderLeft: '1px dashed #ff2d8a', pointerEvents: 'none', zIndex: 4 },
+  guideY: { display: 'none', position: 'absolute', left: 0, right: 0, height: 0, borderTop: '1px dashed #ff2d8a', pointerEvents: 'none', zIndex: 4 },
+
   fabricContainer: {
     border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden', background: '#fff',
     display: 'flex', justifyContent: 'center', padding: 4,

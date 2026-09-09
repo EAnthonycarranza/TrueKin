@@ -34,6 +34,10 @@ import FabricCanvas from '../designer/FabricCanvas';
 import ShirtViewer from './ShirtViewer';
 import ColorWheel from './ColorWheel';
 import { PlacementPanel, LayersPanel, BackgroundRemoverPanel } from './StudioPanels';
+import {
+  canonicalColor, defaultPalette, normalizePalette, loadStoredPalette, storePalette,
+  swatchDisplayColor, isLight,
+} from './palette';
 import { installSelectionStyle, selectAll, duplicateActive, nudgeActive, isLocked, setLocked, rotateActive } from './placement';
 import { attachSnapping } from './snapping';
 import { getMockupUrl } from '../designer/designerMockups';
@@ -46,56 +50,10 @@ import { dataURLToBlob, loadFabricAssetImage, loadFabricImageFromFile } from '..
 import { getPrintRectPx, PRINT_AREA, VIEWS, VIEW_IDS, SLEEVE_VIEW_IDS, viewInfo, sleeveZoneCanvas, sleeveProbeImage } from './printArea';
 import { STUDIO_ID, STUDIO_VERSION, renderPrintTexture } from './designState';
 import {
-  useFabricColor, sampleMockupAt, colorDelta, rgbToHex, hexToRgb, PROBES,
-  SHIRT_COLOR_NAMES, FABRIC_COLOR_FALLBACK, normalizeHex, presetKeyFor,
+  useFabricColor, sampleMockupAt, colorDelta, rgbToHex, PROBES,
+  SHIRT_COLOR_NAMES, presetKeyFor,
 } from './shirtColor';
 import './Shirt3DStudio.css';
-
-/* ---------- editable shirt palette ----------
- * Entries are { hex, preset }. `preset` remembers which studio photo the
- * swatch started from so an edited swatch can be restored. A swatch whose hex
- * still equals a preset shows that photo; any other hex is tinted.
- */
-const PALETTE_KEY = 'truking.shirtPalette.v1';
-
-function canonicalColor(hex) {
-  return presetKeyFor(hex) || normalizeHex(hex);
-}
-
-function defaultPalette() {
-  return TSHIRT_COLORS.map((c) => ({ hex: c, preset: c }));
-}
-
-function normalizePalette(list) {
-  if (!Array.isArray(list)) return null;
-  const out = list
-    .map((e) => {
-      const hex = canonicalColor(typeof e === 'string' ? e : e?.hex);
-      if (!hex) return null;
-      const preset = e && typeof e === 'object' && e.preset ? presetKeyFor(e.preset) : presetKeyFor(hex);
-      return { hex, preset };
-    })
-    .filter(Boolean);
-  return out.length ? out : null;
-}
-
-function loadStoredPalette() {
-  try {
-    return normalizePalette(JSON.parse(window.localStorage.getItem(PALETTE_KEY)));
-  } catch {
-    return null;
-  }
-}
-
-/** What a swatch looks like on screen: the photo's fabric for presets, the hex otherwise. */
-function swatchDisplayColor(entry) {
-  return entry.hex === entry.preset ? FABRIC_COLOR_FALLBACK[entry.preset] || entry.hex : entry.hex;
-}
-
-function isLight(hex) {
-  const c = hexToRgb(hex);
-  return c ? (0.299 * c.r + 0.587 * c.g + 0.114 * c.b) / 255 > 0.6 : true;
-}
 
 // Bigger, clearer handles on every element (applies before any object is created).
 installSelectionStyle();
@@ -223,11 +181,7 @@ export default function Shirt3DStudio({ designData, onSave, onSnapshot, saving =
   const mockupUrl = isSleeveView ? sleeveMockups[view] : bodyMockups[view];
 
   /* ---------- palette persistence ---------- */
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(PALETTE_KEY, JSON.stringify(palette));
-    } catch { /* storage unavailable */ }
-  }, [palette]);
+  useEffect(() => { storePalette(palette); }, [palette]);
 
   /* ---------- body mockups (photo or tinted) ----------
    * Debounced so dragging the wheel recolours the 3D tee instantly while the
