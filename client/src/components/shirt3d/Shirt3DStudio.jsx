@@ -35,7 +35,7 @@ import ShirtViewer from './ShirtViewer';
 import ColorWheel from './ColorWheel';
 import { PlacementPanel, LayersPanel, BackgroundRemoverPanel } from './StudioPanels';
 import {
-  canonicalColor, defaultPalette, normalizePalette, loadStoredPalette, storePalette,
+  canonicalColor, defaultPalette, normalizePalette, loadStoredPalette, storePalette, paletteFromColors,
   swatchDisplayColor, isLight,
 } from './palette';
 import { installSelectionStyle, selectAll, duplicateActive, nudgeActive, isLocked, setLocked, rotateActive } from './placement';
@@ -98,9 +98,18 @@ const SLEEVE_AREAS = Object.fromEntries(
   SLEEVE_VIEW_IDS.map((id) => [id, { area: sleeveZoneCanvas(id), probe: sleeveProbeImage(id) }])
 );
 
-export default function Shirt3DStudio({ designData, onSave, onSnapshot, saving = false }) {
+export default function Shirt3DStudio({ designData, onSave, onSnapshot, saving = false, availableColors }) {
   const [tshirtColor, setTshirtColorRaw] = useState('#FFFFFF');
-  const [palette, setPalette] = useState(() => loadStoredPalette() || defaultPalette());
+  const [storedPalette, setPalette] = useState(() => loadStoredPalette() || defaultPalette());
+
+  /**
+   * When the drop names its in-stock blanks, they become the studio's palette:
+   * you design against colours the shop actually presses. The stored, editable
+   * palette is the fallback for a drop that names none.
+   */
+  const lockedPalette = useMemo(() => paletteFromColors(availableColors), [availableColors]);
+  const palette = lockedPalette || storedPalette;
+  const paletteLocked = !!lockedPalette;
   const [picker, setPicker] = useState(null); // null | { mode: 'new' | 'edit', index }
   const [bodyMockups, setBodyMockups] = useState(() => ({
     front: getMockupUrl('#FFFFFF', 'front'),
@@ -181,7 +190,10 @@ export default function Shirt3DStudio({ designData, onSave, onSnapshot, saving =
   const mockupUrl = isSleeveView ? sleeveMockups[view] : bodyMockups[view];
 
   /* ---------- palette persistence ---------- */
-  useEffect(() => { storePalette(palette); }, [palette]);
+  // Only the editable palette is persisted — a product's colour list is the
+  // product's, and writing it to the shared studio palette would leak one
+  // drop's blanks into every other one.
+  useEffect(() => { if (!paletteLocked) storePalette(storedPalette); }, [storedPalette, paletteLocked]);
 
   /* ---------- body mockups (photo or tinted) ----------
    * Debounced so dragging the wheel recolours the 3D tee instantly while the
@@ -254,7 +266,7 @@ export default function Shirt3DStudio({ designData, onSave, onSnapshot, saving =
     }
     const t = setTimeout(() => {
       const savedPalette = normalizePalette(data?.palette);
-      if (savedPalette) setPalette(savedPalette);
+      if (savedPalette && !paletteLocked) setPalette(savedPalette);
       if (data?.tshirtColor) setTshirtColor(data.tshirtColor);
       for (const id of VIEW_IDS) {
         const objects = data?.objects?.[id] || data?.[`${id}Objects`];
@@ -264,7 +276,27 @@ export default function Shirt3DStudio({ designData, onSave, onSnapshot, saving =
       }
     }, 300);
     return () => clearTimeout(t);
+    // paletteLocked only gates whether a saved palette is restored; it is read,
+    // not tracked, so a colour toggle mid-edit does not re-run the whole load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [designData, setTshirtColor, refs]);
+
+  /**
+   * Keep the selected colour inside the drop's palette.
+   *
+   * The admin can untick the colour a design was saved in, and a saved design
+   * can name one the drop never stocked; either way the tee would keep
+   * rendering in a colour the shop does not sell, with nothing selected in the
+   * swatch row.
+   *
+   * Adjusted during render rather than in an effect (the pattern React
+   * documents for deriving state from changed props): the palette entries are
+   * already canonical, so the correction settles in one pass and React re-runs
+   * this render before painting instead of flashing the wrong colour first.
+   */
+  if (lockedPalette && !lockedPalette.some((entry) => entry.hex === tshirtColor)) {
+    setTshirtColor(lockedPalette[0].hex);
+  }
 
   const handleCanvasReady = useCallback((canvas, id) => {
     // Hover outline so it is obvious what a click will grab.
@@ -746,8 +778,8 @@ export default function Shirt3DStudio({ designData, onSave, onSnapshot, saving =
                     key={`${i}-${entry.hex}`}
                     type="button"
                     onClick={() => setTshirtColor(entry.hex)}
-                    onDoubleClick={() => openPicker('edit', i)}
-                    title={`${label} — double-click to edit`}
+                    onDoubleClick={() => !paletteLocked && openPicker('edit', i)}
+                    title={paletteLocked ? label : `${label} — double-click to edit`}
                     aria-label={label}
                     aria-pressed={on}
                     className={`tk-studio-swatch${on ? ' is-active' : ''}`}
@@ -757,21 +789,31 @@ export default function Shirt3DStudio({ designData, onSave, onSnapshot, saving =
                   </button>
                 );
               })}
-              {selectedIndex >= 0 && (
+              {/* Editing and custom colours are hidden while the drop supplies the
+                  palette — the list belongs to The Palette section, and letting
+                  it be edited in two places would only make them disagree. */}
+              {!paletteLocked && selectedIndex >= 0 && (
                 <button type="button" onClick={() => openPicker('edit', selectedIndex)} title="Edit selected color" aria-label="Edit selected color" className="tk-studio-icon-action">
                   <Pencil size={15} />
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => (picker?.mode === 'new' ? setPicker(null) : openPicker('new'))}
-                title="Create a custom shirt color"
-                className={`tk-studio-compact-action${picker?.mode === 'new' || (isCustomColor && selectedIndex < 0) ? ' is-active' : ''}`}
-                aria-pressed={picker?.mode === 'new' || (isCustomColor && selectedIndex < 0)}
-              >
-                <Pipette size={15} /> <span>Custom</span>
-              </button>
+              {!paletteLocked && (
+                <button
+                  type="button"
+                  onClick={() => (picker?.mode === 'new' ? setPicker(null) : openPicker('new'))}
+                  title="Create a custom shirt color"
+                  className={`tk-studio-compact-action${picker?.mode === 'new' || (isCustomColor && selectedIndex < 0) ? ' is-active' : ''}`}
+                  aria-pressed={picker?.mode === 'new' || (isCustomColor && selectedIndex < 0)}
+                >
+                  <Pipette size={15} /> <span>Custom</span>
+                </button>
+              )}
             </div>
+            {paletteLocked && (
+              <p className="tk-studio-palette-note">
+                {palette.length} {palette.length === 1 ? 'colour' : 'colours'} from this drop&rsquo;s palette — edit the list in <strong>The Palette</strong> above.
+              </p>
+            )}
           </section>
         </div>
 

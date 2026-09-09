@@ -421,7 +421,14 @@ export default function AdminProductEdit() {
             )}
             {availableColors.length === 0 && (
               <p className="tk-empty-note">
-                <Info size={13} /> No colors selected — product will ship in one default color.
+                <Info size={13} /> No colors selected — product will ship in one default color,
+                and the studio keeps its own editable palette.
+              </p>
+            )}
+            {availableColors.length > 0 && (
+              <p className="tk-empty-note">
+                <Info size={13} /> These are the only colors the studio below will offer, so every
+                design is made against a blank you actually stock.
               </p>
             )}
           </section>
@@ -692,6 +699,7 @@ export default function AdminProductEdit() {
                         onSave={handleSaveDesign}
                         onSnapshot={handleSnapshot}
                         saving={savingDesign}
+                        availableColors={availableColors}
                       />
                     )}
                   </Suspense>
@@ -707,6 +715,7 @@ export default function AdminProductEdit() {
                       onSave={handleSaveDesign}
                       onSnapshot={handleSnapshot}
                       saving={savingDesign}
+                      availableColors={availableColors}
                     />
                   </Suspense>
                 )}

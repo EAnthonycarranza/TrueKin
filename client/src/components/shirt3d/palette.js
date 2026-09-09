@@ -50,6 +50,31 @@ export function storePalette(palette) {
   } catch { /* private mode */ }
 }
 
+/**
+ * Build a palette from a product's in-stock colours.
+ *
+ * When a drop names the blanks it ships in (The Palette, section 02 of the
+ * product editor), those colours ARE the studio's palette — there is no point
+ * designing against a green tee the shop does not stock. Returns null when the
+ * product names none, which is the signal to fall back to the editable stored
+ * palette.
+ *
+ * Duplicates are dropped rather than rendered twice, since the admin's list is
+ * free-form and a hex may appear in more than one case.
+ */
+export function paletteFromColors(colors) {
+  if (!Array.isArray(colors)) return null;
+  const seen = new Set();
+  const out = [];
+  for (const raw of colors) {
+    const hex = canonicalColor(raw);
+    if (!hex || seen.has(hex)) continue;
+    seen.add(hex);
+    out.push({ hex, preset: presetKeyFor(hex) });
+  }
+  return out.length ? out : null;
+}
+
 /** What a swatch looks like on screen: the photo's fabric for presets, the hex otherwise. */
 export function swatchDisplayColor(entry) {
   return entry.hex === entry.preset ? FABRIC_COLOR_FALLBACK[entry.preset] || entry.hex : entry.hex;
