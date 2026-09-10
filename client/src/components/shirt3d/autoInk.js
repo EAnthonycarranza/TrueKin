@@ -8,6 +8,9 @@
  *   text            recoloured. A fill is one value and changing it is lossless.
  *   paired mark     swapped for its authored twin (Shield · Ink ⇄ Bone). Real
  *                   artwork, so it always looks right.
+ *   flat artwork    re-inked over its own alpha. Most of what a customer sends
+ *                   is a one-colour logo, which is as safe to recolour as text;
+ *                   see imageTone for how narrowly "flat" is judged.
  *   anything else   left alone and reported, for the studio to warn about. A
  *                   photograph or a multi-colour illustration cannot be
  *                   recoloured without wrecking it, and guessing is worse than
@@ -17,6 +20,7 @@
  * admin picks a colour by hand. Auto-contrast is a safety net, not an argument.
  */
 import { readableInk, readsAgainst, prefersLightInk, variantFor } from './contrast';
+import { analyzeArtwork, recolorArtwork } from './imageTone';
 
 const isText = (obj) => obj?.type === 'textbox' || obj?.type === 'text' || obj?.type === 'i-text';
 
@@ -38,12 +42,8 @@ export function applyAutoInk(canvas, fabricHex) {
     if (obj.inkLocked) continue;
 
     if (isText(obj)) {
-      const fill = solidFill(obj.fill);
       // A stroked outline carries its own contrast, so leave those alone.
-      if (fill && !obj.stroke && !readsAgainst(fill, fabricHex)) {
-        obj.set('fill', readableInk(fabricHex));
-        result.changed += 1;
-      }
+      if (!obj.stroke && reinkText(obj, fabricHex)) result.changed += 1;
       continue;
     }
 
@@ -66,12 +66,70 @@ export function applyAutoInk(canvas, fabricHex) {
     }
 
     if (obj.type === 'image') {
-      result.unreadable.push({ type: 'image', name: obj.assetLabel || 'an image' });
+      if (reinkFlatImage(obj, fabricHex)) result.changed += 1;
+      else if (obj._inkFlat === false) {
+        result.unreadable.push({ type: 'image', name: obj.assetLabel || 'an image' });
+      }
     }
   }
 
   if (result.changed) canvas.renderAll();
   return result;
+}
+
+/**
+ * Re-ink text, remembering the colour it was actually authored in.
+ *
+ * Without that memory a navy heading pushed to Bone on a navy tee comes back as
+ * flat black on white — readable, but not the colour anyone chose. The original
+ * is restored the moment a shirt it reads against comes round again.
+ */
+function reinkText(obj, fabricHex) {
+  const fill = solidFill(obj.fill);
+  if (!fill) return false;
+  if (obj._inkOriginalFill === undefined) obj._inkOriginalFill = fill;
+
+  const original = obj._inkOriginalFill;
+  const target = readsAgainst(original, fabricHex) ? original : readableInk(fabricHex);
+  if (target === fill) return false;
+  obj.set('fill', target);
+  return true;
+}
+
+/**
+ * Re-ink an uploaded image that is a single colour over transparency.
+ *
+ * The pristine element is kept and every repaint derives from it, so switching
+ * colours repeatedly cannot accumulate fringing, and a shirt the original reads
+ * against restores the artwork exactly as supplied — a navy crest comes back
+ * navy rather than settling on whichever ink it was last forced to.
+ *
+ * On a design reloaded from a save these fields are gone and the analysis runs
+ * against whatever was stored. The mark still stays readable; it just treats
+ * the saved colour as its original, which is the best that can be known.
+ *
+ * @returns {boolean} whether the object was repainted
+ */
+function reinkFlatImage(obj, fabricHex) {
+  if (obj._inkFlat === undefined) {
+    const source = obj._inkOriginalEl || obj.getElement?.();
+    if (!source) { obj._inkFlat = false; return false; }
+    const analysis = analyzeArtwork(source);
+    obj._inkFlat = analysis.flat;
+    obj._inkOriginalHex = analysis.hex;
+    if (analysis.flat) obj._inkOriginalEl = source;
+  }
+  if (!obj._inkFlat || !obj._inkOriginalEl || !obj._inkOriginalHex) return false;
+
+  // The original reads here — put the customer's own colour back.
+  const wantOriginal = readsAgainst(obj._inkOriginalHex, fabricHex);
+  const target = wantOriginal ? null : readableInk(fabricHex);
+  if (obj._inkAppliedHex === (target || null)) return false;
+
+  obj.setElement(wantOriginal ? obj._inkOriginalEl : recolorArtwork(obj._inkOriginalEl, target));
+  obj._inkAppliedHex = target || null;
+  obj.dirty = true;
+  return true;
 }
 
 /**
@@ -132,11 +190,6 @@ export function inkNewObject(obj, tags, fabricHex) {
     obj.assetAltSrc = tags.altSrc;
     if (tags.label) obj.assetLabel = tags.label;
   }
-  if (isText(obj)) {
-    const fill = solidFill(obj.fill);
-    if (fill && !obj.stroke && !readsAgainst(fill, fabricHex)) {
-      obj.set('fill', readableInk(fabricHex));
-    }
-  }
+  if (isText(obj) && !obj.stroke) reinkText(obj, fabricHex);
   return obj;
 }
