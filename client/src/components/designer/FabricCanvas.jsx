@@ -86,6 +86,16 @@ function drawMockupDirect(ctx, mockupImg, w, h) {
  * Fabric clipPath and the 3D decal placement can never drift apart.
  */
 
+/**
+ * Custom object properties that must survive a save.
+ *
+ *   assetTone / assetAltSrc — the mark's authored light or dark twin, so the
+ *     studio can swap it when the shirt colour changes.
+ *   inkLocked — set once the admin picks a colour by hand, after which the
+ *     studio stops managing that object's ink.
+ */
+export const EXTRA_PROPS = ['assetTone', 'assetAltSrc', 'inkLocked'];
+
 const FabricCanvas = forwardRef(function FabricCanvas(
   { svgPath, tshirtColor, view, mockupUrl, preColored = false, printArea = PRINT_AREA, onCanvasReady, onObjectSelect, onDesignChange },
   ref
@@ -255,7 +265,10 @@ const FabricCanvas = forwardRef(function FabricCanvas(
 
       return dataURL;
     },
-    getObjects: () => fabricRef.current?.getObjects().map((obj) => obj.toJSON()) || [],
+    // toJSON() drops anything Fabric does not know about, so the auto-ink
+    // bookkeeping has to be named explicitly or a saved design comes back
+    // unable to tell a swappable brand mark from an uploaded photo.
+    getObjects: () => fabricRef.current?.getObjects().map((obj) => obj.toObject(EXTRA_PROPS)) || [],
     loadObjects: (objects) => {
       if (!fabricRef.current || !objects) return;
       objects.forEach((obj) => addFabricObject(fabricRef.current, obj));

@@ -922,3 +922,25 @@
   color: var(--text, #0a0a0a);
   font-weight: 600;
 }
+
+/* Shown when artwork cannot be made readable automatically — a photo or a
+   multi-colour illustration on a blank too close to its own tone. */
+.tk-studio-contrast-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 10px 0 0;
+  padding: 10px 13px;
+  border: 1px solid var(--warning, #a5660a);
+  border-left-width: 3px;
+  background: var(--warning-soft, #f4e3bd);
+  color: var(--ink, #0a0a0a);
+  font-size: 12.5px;
+  line-height: 1.5;
+  border-radius: 3px;
+}
+.tk-studio-contrast-warning svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--warning, #a5660a);
+}

@@ -43,6 +43,7 @@ import { attachSnapping } from './snapping';
 import { getMockupUrl } from '../designer/designerMockups';
 import { buildMockupUrl, buildSleeveMockupUrl } from './mockupTint';
 import { renderColorways } from './colorways';
+import { applyAutoInk, inkNewObject, sourceFor } from './autoInk';
 import {
   TSHIRT_COLORS, TSHIRT_FRONT_PATH, TSHIRT_BACK_PATH, CANVAS_CONFIG,
   FONT_OPTIONS, SHAPE_DEFS, CLIPART_CATEGORIES, DEFAULT_TEXT_CONFIG,
@@ -103,6 +104,8 @@ export default function Shirt3DStudio({ designData, onSave, onSnapshot, onColorw
   const [tshirtColor, setTshirtColorRaw] = useState('#FFFFFF');
   const [storedPalette, setPalette] = useState(() => loadStoredPalette() || defaultPalette());
   const [shooting, setShooting] = useState(null); // null | { done, total }
+  // Images that cannot be recoloured automatically — reported, not touched.
+  const [lowContrast, setLowContrast] = useState([]);
 
   /**
    * When the drop names its in-stock blanks, they become the studio's palette:
@@ -229,6 +232,27 @@ export default function Shirt3DStudio({ designData, onSave, onSnapshot, onColorw
     }, 120);
     return () => { alive = false; clearTimeout(timer); };
   }, [fabricColor]);
+
+  /**
+   * Keep the artwork readable when the blank changes underneath it.
+   *
+   * Measured against the *fabric* colour — what the tee photographs as — not
+   * the swatch hex, which is only an identifier and diverges most on grey.
+   */
+  useEffect(() => {
+    if (!fabricColor) return undefined;
+    const timer = setTimeout(() => {
+      const stuck = [];
+      for (const id of VIEW_IDS) {
+        const canvas = refs[id].current?.getCanvas();
+        if (!canvas) continue;
+        const { unreadable } = applyAutoInk(canvas, fabricColor);
+        stuck.push(...unreadable.map((u) => ({ ...u, view: id })));
+      }
+      setLowContrast(stuck);
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [fabricColor, refs]);
 
   /* ---------- palette editing ---------- */
   const openPicker = (mode, index = -1) => {
@@ -420,7 +444,7 @@ export default function Shirt3DStudio({ designData, onSave, onSnapshot, onColorw
       textAlign: 'center',
       editable: false,
     });
-    addToCanvas(text);
+    addToCanvas(inkNewObject(text, null, fabricColor));
   };
 
   const handleAddImage = async (e) => {
@@ -449,7 +473,11 @@ export default function Shirt3DStudio({ designData, onSave, onSnapshot, onColorw
 
     if (item.src) {
       try {
-        addToCanvas(await loadFabricAssetImage(fabric, item.src));
+        // Load the variant that reads on this blank, tagged with the file it
+        // actually got so later colour changes swap the right way.
+        const tags = sourceFor(item, fabricColor);
+        const image = await loadFabricAssetImage(fabric, tags.src);
+        addToCanvas(inkNewObject(image, { ...tags, label: item.label }, fabricColor));
       } catch (error) {
         console.warn(error);
       }
@@ -1155,6 +1183,17 @@ export default function Shirt3DStudio({ designData, onSave, onSnapshot, onColorw
       </div>
 
       {/* Actions */}
+      {lowContrast.length > 0 && (
+        <div className="tk-studio-contrast-warning" role="status">
+          <AlertTriangle size={15} aria-hidden="true" />
+          <span>
+            {lowContrast.length === 1 ? 'An image' : `${lowContrast.length} images`} may not read on
+            this colour. Photos and multi-colour art can&rsquo;t be recoloured safely — swap the
+            artwork, or place it on a lighter blank.
+          </span>
+        </div>
+      )}
+
       <div className="tk-studio-export-actions" style={s.actions}>
         <button type="button" className="btn btn-primary btn-sm tk-studio-save-action" onClick={handleSave} disabled={saving || !onSave}>
           <Save size={14} /> {saving ? 'Saving…' : 'Save Design'}

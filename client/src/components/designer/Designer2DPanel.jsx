@@ -20,13 +20,14 @@ import {
   Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight,
   Layers, CopyPlus, FlipHorizontal2, FlipVertical2,
   ArrowUpToLine, ArrowDownToLine, Sparkles, CircleDot,
-  Sticker, Magnet, Pencil, Pipette, Check, X, Plus, RotateCcw, Users,
+  Sticker, Magnet, Pencil, Pipette, Check, X, Plus, RotateCcw, Users, AlertTriangle,
 } from 'lucide-react';
 import FabricCanvas from './FabricCanvas';
 import { dataURLToBlob, loadFabricAssetImage, loadFabricImageFromFile } from './designerHelpers';
 import { attachSnapping } from '../shirt3d/snapping';
 import { PRINT_AREA, VIEWS, VIEW_IDS, SLEEVE_VIEW_IDS, viewInfo, sleeveZoneCanvas, getPrintRectPx } from '../shirt3d/printArea';
 import { renderColorways } from '../shirt3d/colorways';
+import { applyAutoInk, inkNewObject, sourceFor } from '../shirt3d/autoInk';
 import ColorWheel from '../shirt3d/ColorWheel';
 import { buildMockupUrl, buildSleeveMockupUrl } from '../shirt3d/mockupTint';
 import { presetKeyFor, SHIRT_COLOR_NAMES, useFabricColor } from '../shirt3d/shirtColor';
@@ -426,6 +427,8 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, onColo
   // one editor is the same swatch in the other.
   const [storedPalette, setPalette] = useState(() => loadStoredPalette() || defaultPalette());
   const [shooting, setShooting] = useState(null); // null | { done, total }
+  // Images that cannot be recoloured automatically — reported, not touched.
+  const [lowContrast, setLowContrast] = useState([]);
 
   /**
    * When the drop names its in-stock blanks, they become the studio's palette:
@@ -622,6 +625,29 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, onColo
     return () => clearTimeout(timer);
   }, [tshirtColor, updatePreview]);
 
+  /**
+   * Keep the artwork readable when the blank changes underneath it.
+   *
+   * Runs against the *fabric* colour, which is what the tee photographs as —
+   * the swatch hex is only an identifier, and on grey the two are far enough
+   * apart to flip the answer.
+   */
+  useEffect(() => {
+    if (!fabricColor) return undefined;
+    const timer = setTimeout(() => {
+      const stuck = [];
+      for (const id of VIEW_IDS) {
+        const canvas = refs[id].current?.getCanvas();
+        if (!canvas) continue;
+        const { changed, unreadable } = applyAutoInk(canvas, fabricColor);
+        if (changed) updatePreview(id);
+        stuck.push(...unreadable.map((u) => ({ ...u, view: id })));
+      }
+      setLowContrast(stuck);
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [fabricColor, refs, updatePreview]);
+
   // --- Track selection count for group selections ---
   const [selectionCount, setSelectionCount] = useState(0);
 
@@ -764,7 +790,7 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, onColo
       textAlign: 'center',
       editable: false,
     });
-    addToCanvas(text);
+    addToCanvas(inkNewObject(text, null, fabricColor));
   };
 
   const handleAddShape = (shapeDef) => {
@@ -787,7 +813,11 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, onColo
 
     if (item.src) {
       try {
-        addToCanvas(await loadFabricAssetImage(fabric, item.src));
+        // Load the variant that reads on this blank, and tag the object with
+        // the file it actually got so later colour changes swap correctly.
+        const tags = sourceFor(item, fabricColor);
+        const image = await loadFabricAssetImage(fabric, tags.src);
+        addToCanvas(inkNewObject(image, { ...tags, label: item.label }, fabricColor));
       } catch (error) {
         console.warn(error);
       }
@@ -924,6 +954,10 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, onColo
     } else {
       selectedObject.set(prop, value);
     }
+    // Picking a colour by hand ends the studio's management of this object —
+    // auto-contrast is a safety net, and overriding a deliberate choice on the
+    // next colour change would be the studio arguing with the designer.
+    if (prop === 'fill') selectedObject.set('inkLocked', true);
     canvas.renderAll();
     handleDesignChange(selectedView);
   };
@@ -1909,6 +1943,17 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, onColo
         )}
 
       <p style={s.hint}>Add text, assets, images and effects from the bar above. Select an element to edit its properties.</p>
+
+      {lowContrast.length > 0 && (
+        <div className="tk-studio-contrast-warning" role="status">
+          <AlertTriangle size={15} aria-hidden="true" />
+          <span>
+            {lowContrast.length === 1 ? 'An image' : `${lowContrast.length} images`} may not read on
+            this colour. Photos and multi-colour art can&rsquo;t be recoloured safely — swap the
+            artwork, or place it on a lighter blank.
+          </span>
+        </div>
+      )}
 
       {/* Actions */}
       <div className="tk-studio-export-actions" style={s.actions}>
