@@ -108,6 +108,9 @@ export const api = {
     request(`/shipping/order/${orderId}/refund`, { method: 'POST' }),
   adminListCarriers: () => request('/shipping/carriers'),
 
+  adminSaveColorways: (id, formData) =>
+    request(`/products/${id}/colorways`, { method: 'PUT', body: formData, isFormData: true }),
+
   adminGetHomeSettings: () => request('/settings/admin/home'),
   adminSaveHomeSettings: (body) => request('/settings/admin/home', { method: 'PUT', body }),
 };

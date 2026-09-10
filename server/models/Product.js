@@ -49,6 +49,22 @@ const productSchema = new mongoose.Schema({
     type: String,
     trim: true,
   }],
+
+  /**
+   * Front and back product shots per shirt colour, so the gallery can follow
+   * the colour a viewer picks instead of showing one fixed set.
+   *
+   * A Map keyed by hex rather than an object literal: Mongoose would otherwise
+   * treat "#000000" as a nested path and refuse the leading "#".
+   */
+  colorImages: {
+    type: Map,
+    of: new mongoose.Schema({
+      front: { type: String, default: '' },
+      back: { type: String, default: '' },
+    }, { _id: false }),
+    default: undefined,
+  },
   sizes: [{
     size: {
       type: String,

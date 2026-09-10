@@ -26,6 +26,7 @@ import FabricCanvas from './FabricCanvas';
 import { dataURLToBlob, loadFabricAssetImage, loadFabricImageFromFile } from './designerHelpers';
 import { attachSnapping } from '../shirt3d/snapping';
 import { PRINT_AREA, VIEWS, VIEW_IDS, SLEEVE_VIEW_IDS, viewInfo, sleeveZoneCanvas, getPrintRectPx } from '../shirt3d/printArea';
+import { renderColorways } from '../shirt3d/colorways';
 import ColorWheel from '../shirt3d/ColorWheel';
 import { buildMockupUrl, buildSleeveMockupUrl } from '../shirt3d/mockupTint';
 import { presetKeyFor, SHIRT_COLOR_NAMES, useFabricColor } from '../shirt3d/shirtColor';
@@ -369,7 +370,7 @@ const TOOL_TABS = [
 /* ═══════════════════════════════════════════════════════════════
    MAIN COMPONENT
    ═══════════════════════════════════════════════════════════════ */
-export default function Designer2DPanel({ designData, onSave, onSnapshot, saving = false, availableColors }) {
+export default function Designer2DPanel({ designData, onSave, onSnapshot, onColorways, saving = false, availableColors }) {
   // --- Core state ---
   const [tshirtColor, setTshirtColorRaw] = useState('#FFFFFF');
   // Normalise every colour the same way the 3D studio does, so a hex typed in
@@ -424,6 +425,7 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
   // The same stored palette the 3D studio uses, so a custom swatch created in
   // one editor is the same swatch in the other.
   const [storedPalette, setPalette] = useState(() => loadStoredPalette() || defaultPalette());
+  const [shooting, setShooting] = useState(null); // null | { done, total }
 
   /**
    * When the drop names its in-stock blanks, they become the studio's palette:
@@ -433,6 +435,9 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
   const lockedPalette = useMemo(() => paletteFromColors(availableColors), [availableColors]);
   const palette = lockedPalette || storedPalette;
   const paletteLocked = !!lockedPalette;
+  // Only a drop that has named its blanks can be shot per colour — without a
+  // list there is no set of colourways to produce.
+  const shootableColors = useMemo(() => (lockedPalette || []).map((e) => e.hex), [lockedPalette]);
   const [picker, setPicker] = useState(null); // null | { mode: 'new' | 'edit', index }
   // Preset colours have a studio photo; any other hex is tinted from the white
   // tee, which is async — so the mockup URLs live in state rather than being
@@ -1055,6 +1060,30 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
       if (!dataURL) throw new Error('No content');
       if (onSnapshot) onSnapshot(dataURLToBlob(dataURL), getDesignState());
     } catch { /* */ } finally { setCapturing2D(false); }
+  };
+
+  /**
+   * Shoot the whole palette: a front and a back photo of every colour the drop
+   * stocks, composited off-screen from the artwork layer so the live canvas is
+   * never disturbed and nothing races an image decode.
+   */
+  const handleShootColorways = async () => {
+    if (!onColorways || !shootableColors.length) return;
+    setShooting({ done: 0, total: shootableColors.length * 2 });
+    try {
+      const textures = {
+        front: refs.front.current?.getTextureDataURL() || null,
+        back: refs.back.current?.getTextureDataURL() || null,
+      };
+      const { results, failed } = await renderColorways(
+        shootableColors,
+        textures,
+        (done, total) => setShooting({ done, total }),
+      );
+      await onColorways(results, failed);
+    } finally {
+      setShooting(null);
+    }
   };
 
   const handleCaptureBoth = () => {
@@ -1892,6 +1921,12 @@ export default function Designer2DPanel({ designData, onSave, onSnapshot, saving
         <button type="button" className="btn btn-secondary btn-sm" onClick={handleCaptureBoth} disabled={capturing2D}>
           <Camera size={14} /> Capture Both Sides
         </button>
+        {onColorways && shootableColors.length > 0 && (
+          <button type="button" className="btn btn-secondary btn-sm" onClick={handleShootColorways} disabled={!!shooting}>
+            <Camera size={14} />
+            {shooting ? `Shooting ${shooting.done}/${shooting.total}…` : `Shoot all ${shootableColors.length} colours`}
+          </button>
+        )}
         <button type="button" className="btn btn-secondary btn-sm" onClick={handleDownload}>
           <Download size={14} /> Download PNG
         </button>

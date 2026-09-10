@@ -231,8 +231,13 @@ exports.deleteProduct = async (req, res) => {
       return res.status(404).json({ message: 'Product not found' });
     }
 
-    // Clean up images
-    for (const imageUrl of product.imageUrls) {
+    // Clean up images — the gallery set and the per-colour shots, which live
+    // outside imageUrls and would otherwise be stranded in the bucket forever.
+    const orphans = [
+      ...product.imageUrls,
+      ...[...(product.colorImages?.values() || [])].flatMap((e) => [e.front, e.back]),
+    ].filter(Boolean);
+    for (const imageUrl of orphans) {
       await storage.deleteImage(imageUrl);
     }
 
@@ -282,6 +287,67 @@ exports.saveDesign = async (req, res) => {
     }
 
     await product.save();
+    res.json({ product });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+/**
+ * Admin: store the per-colour product shots.
+ *
+ * Files arrive named `<hex>|<side>` so one request carries the whole set —
+ * twelve colours is twenty-four uploads, and doing them one request each was
+ * both slower and far more likely to leave the set half-written.
+ *
+ * Replacing a colourway deletes the object it supersedes, otherwise every
+ * re-press would strand another orphan in the bucket.
+ */
+exports.saveColorImages = async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product) return res.status(404).json({ message: 'Product not found' });
+
+    const files = req.files?.colorways || [];
+    if (!files.length) return res.status(400).json({ message: 'No colorway images provided' });
+
+    const stale = [];
+    const next = new Map(product.colorImages || []);
+
+    for (const file of files) {
+      const [hex, side] = String(file.originalname || '').split('|');
+      if (!/^#[0-9a-fA-F]{6}$/.test(hex || '') || !['front', 'back'].includes(side)) {
+        return res.status(400).json({ message: `Unexpected colorway "${file.originalname}"` });
+      }
+      const key = hex.toUpperCase();
+      const name = `colorway-${product._id}-${key.slice(1)}-${side}-${Date.now()}.png`;
+      const buffer = await sharp(file.buffer)
+        .resize(1200, 1200, { fit: 'inside', withoutEnlargement: true })
+        .png({ quality: 95 })
+        .toBuffer();
+      const url = await storage.saveImage(name, buffer, 'image/png');
+
+      const entry = { ...(next.get(key) || { front: '', back: '' }) };
+      if (entry[side]) stale.push(entry[side]);
+      entry[side] = url;
+      next.set(key, entry);
+    }
+
+    // Colours the drop no longer stocks keep no photography.
+    const stocked = new Set((product.availableColors || []).map((c) => c.toUpperCase()));
+    for (const [key, entry] of next) {
+      if (stocked.size && !stocked.has(key)) {
+        stale.push(entry.front, entry.back);
+        next.delete(key);
+      }
+    }
+
+    product.colorImages = next;
+    await product.save();
+
+    // After the save: losing a thumbnail is survivable, losing the record is not.
+    await Promise.all(stale.filter(Boolean).map((url) => storage.deleteImage(url).catch(() => {})));
+
     res.json({ product });
   } catch (error) {
     res.status(500).json({ message: error.message });

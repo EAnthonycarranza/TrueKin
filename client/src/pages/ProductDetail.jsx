@@ -129,6 +129,34 @@ export default function ProductDetail() {
   const hasColors = product?.availableColors?.length > 0;
   const hasSizes = product?.sizes?.length > 0;
 
+  /**
+   * Front and back shots for the colour the viewer picked.
+   *
+   * The admin shoots one pair per stocked colour, so the gallery follows the
+   * swatch instead of showing one fixed set that contradicts it. Keys are
+   * stored uppercase; the swatch hex may be either case.
+   */
+  const colorShots = (() => {
+    if (!selectedColor || !product?.colorImages) return [];
+    const entry = product.colorImages[selectedColor.toUpperCase()]
+      || product.colorImages[selectedColor];
+    if (!entry) return [];
+    return [
+      entry.front && { url: entry.front, label: 'Front' },
+      entry.back && { url: entry.back, label: 'Back' },
+    ].filter(Boolean);
+  })();
+  const hasColorShots = colorShots.length > 0;
+
+  /**
+   * What the gallery shows. A colour with its own shots replaces the generic
+   * set entirely — showing both would put a black tee next to a blue one under
+   * a swatch that says blue.
+   */
+  const galleryImages = hasColorShots
+    ? colorShots
+    : product.imageUrls.map((url) => ({ url, label: '' }));
+
   const handleAddToCart = () => {
     if (hasColors && !selectedColor) {
       toast.error('Please select a color');
@@ -185,10 +213,10 @@ export default function ProductDetail() {
               </Suspense>
             ) : (
               <div className="product-detail-main-image" style={styles.mainImage}>
-                {product.imageUrls[selectedImage] ? (
+                {galleryImages[selectedImage] ? (
                   <img
-                    src={product.imageUrls[selectedImage]}
-                    alt={product.title}
+                    src={galleryImages[selectedImage].url}
+                    alt={`${product.title}${galleryImages[selectedImage].label ? ` — ${galleryImages[selectedImage].label}` : ''}`}
                     style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 12 }}
                   />
                 ) : (
@@ -215,11 +243,12 @@ export default function ProductDetail() {
                     {previewLabel}
                   </button>
                 )}
-                {product.imageUrls.map((url, i) => (
+                {galleryImages.map((shot, i) => (
                   <img
-                    key={i}
-                    src={url}
-                    alt=""
+                    key={`${shot.url}-${i}`}
+                    src={shot.url}
+                    alt={shot.label || ''}
+                    title={shot.label || ''}
                     onClick={() => {
                       setSelectedImage(i);
                       setShowDesignPreview(false);
@@ -253,7 +282,12 @@ export default function ProductDetail() {
                       <button
                         key={hex}
                         type="button"
-                        onClick={() => setSelectedColor(hex)}
+                        onClick={() => {
+                          setSelectedColor(hex);
+                          // Index 1 of black's shots is not index 1 of blue's,
+                          // so drop back to this colour's front view.
+                          setSelectedImage(0);
+                        }}
                         title={COLOR_NAMES[hex] || hex}
                         style={{
                           width: 36,

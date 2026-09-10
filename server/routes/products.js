@@ -10,6 +10,7 @@ const {
   reorderProductImages,
   adminGetProducts,
   saveDesign,
+  saveColorImages,
 } = require('../controllers/productController');
 const { auth, adminOnly } = require('../middleware/auth');
 const upload = require('../middleware/upload');
@@ -28,5 +29,9 @@ router.put('/:id/images/order', auth, adminOnly, reorderProductImages);
 router.put('/:id/design', auth, adminOnly, upload.fields([
   { name: 'designImage', maxCount: 1 },
 ]), saveDesign);
+router.put('/:id/colorways', auth, adminOnly, upload.fields([
+  // 12 colours x front/back, with headroom.
+  { name: 'colorways', maxCount: 40 },
+]), saveColorImages);
 
 module.exports = router;

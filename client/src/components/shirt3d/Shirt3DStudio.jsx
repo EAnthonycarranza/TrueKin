@@ -42,6 +42,7 @@ import { installSelectionStyle, selectAll, duplicateActive, nudgeActive, isLocke
 import { attachSnapping } from './snapping';
 import { getMockupUrl } from '../designer/designerMockups';
 import { buildMockupUrl, buildSleeveMockupUrl } from './mockupTint';
+import { renderColorways } from './colorways';
 import {
   TSHIRT_COLORS, TSHIRT_FRONT_PATH, TSHIRT_BACK_PATH, CANVAS_CONFIG,
   FONT_OPTIONS, SHAPE_DEFS, CLIPART_CATEGORIES, DEFAULT_TEXT_CONFIG,
@@ -98,9 +99,10 @@ const SLEEVE_AREAS = Object.fromEntries(
   SLEEVE_VIEW_IDS.map((id) => [id, { area: sleeveZoneCanvas(id), probe: sleeveProbeImage(id) }])
 );
 
-export default function Shirt3DStudio({ designData, onSave, onSnapshot, saving = false, availableColors }) {
+export default function Shirt3DStudio({ designData, onSave, onSnapshot, onColorways, saving = false, availableColors }) {
   const [tshirtColor, setTshirtColorRaw] = useState('#FFFFFF');
   const [storedPalette, setPalette] = useState(() => loadStoredPalette() || defaultPalette());
+  const [shooting, setShooting] = useState(null); // null | { done, total }
 
   /**
    * When the drop names its in-stock blanks, they become the studio's palette:
@@ -110,6 +112,9 @@ export default function Shirt3DStudio({ designData, onSave, onSnapshot, saving =
   const lockedPalette = useMemo(() => paletteFromColors(availableColors), [availableColors]);
   const palette = lockedPalette || storedPalette;
   const paletteLocked = !!lockedPalette;
+  // Only a drop that has named its blanks can be shot per colour — without a
+  // list there is no set of colourways to produce.
+  const shootableColors = useMemo(() => (lockedPalette || []).map((e) => e.hex), [lockedPalette]);
   const [picker, setPicker] = useState(null); // null | { mode: 'new' | 'edit', index }
   const [bodyMockups, setBodyMockups] = useState(() => ({
     front: getMockupUrl('#FFFFFF', 'front'),
@@ -670,6 +675,32 @@ export default function Shirt3DStudio({ designData, onSave, onSnapshot, saving =
     }
   };
 
+  /**
+   * Shoot the whole palette: a front and a back photo of every colour the drop
+   * stocks. Composited off-screen from the flat artwork layer rather than the
+   * WebGL view — the 3D canvas would have to settle its camera, lights and
+   * colour easing for each colour, and a product grid wants the flat shot
+   * anyway.
+   */
+  const handleShootColorways = async () => {
+    if (!onColorways || !shootableColors.length) return;
+    setShooting({ done: 0, total: shootableColors.length * 2 });
+    try {
+      const textures = {
+        front: frontRef.current?.getTextureDataURL() || null,
+        back: backRef.current?.getTextureDataURL() || null,
+      };
+      const { results, failed } = await renderColorways(
+        shootableColors,
+        textures,
+        (done, total) => setShooting({ done, total }),
+      );
+      await onColorways(results, failed);
+    } finally {
+      setShooting(null);
+    }
+  };
+
   const handleDownload = () => {
     const dataURL = viewerRef.current?.snapshot('#ffffff');
     if (!dataURL) return;
@@ -1134,6 +1165,12 @@ export default function Shirt3DStudio({ designData, onSave, onSnapshot, saving =
         <button type="button" className="btn btn-secondary btn-sm" onClick={handleSnapshot3D} disabled={busy || !onSnapshot || !viewerReady}>
           <Camera size={14} /> Capture 3D
         </button>
+        {onColorways && shootableColors.length > 0 && (
+          <button type="button" className="btn btn-secondary btn-sm" onClick={handleShootColorways} disabled={!!shooting}>
+            <Camera size={14} />
+            {shooting ? `Shooting ${shooting.done}/${shooting.total}…` : `Shoot all ${shootableColors.length} colours`}
+          </button>
+        )}
         <button type="button" className="btn btn-secondary btn-sm" onClick={handleDownload} disabled={!viewerReady}>
           <Download size={14} /> Download 3D PNG
         </button>

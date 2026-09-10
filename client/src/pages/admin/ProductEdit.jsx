@@ -39,6 +39,7 @@ export default function AdminProductEdit() {
   });
   const [editorType, setEditorType] = useState('3d');
   const [availableColors, setAvailableColors] = useState([]);
+  const [colorImages, setColorImages] = useState({});
   const [sizes, setSizes] = useState([]); // [{ size, quantity, unlimited, style: 'unisex' }]
   const [showUnlimitedWarning, setShowUnlimitedWarning] = useState(null);
   const [existingImages, setExistingImages] = useState([]);
@@ -69,6 +70,7 @@ export default function AdminProductEdit() {
           setDesignData(p.designData || null);
           setEditorType(p.editorType || '3d');
           setAvailableColors(p.availableColors || []);
+          setColorImages(p.colorImages || {});
           // Collapse any legacy per-style inventory into a single unisex row per size
           // (sums mens+womens quantities; retains unlimited if either was unlimited)
           const raw = p.sizes || [];
@@ -195,6 +197,37 @@ export default function AdminProductEdit() {
       toast.error(err.message);
     } finally {
       setSavingDesign(false);
+    }
+  };
+
+  /**
+   * Receives the rendered colourways and stores them against the product.
+   *
+   * They go up in one request: twenty-four separate uploads is slower and can
+   * leave the set half-written if one fails. Each file is named `<hex>|<side>`,
+   * which is the only place the pairing is carried.
+   */
+  const handleColorways = async (results, failed) => {
+    if (!isEditing) {
+      toast.error('Save the drop first, then shoot the colours');
+      return;
+    }
+    if (!results.length) {
+      toast.error('Nothing rendered — check the drop has colours selected');
+      return;
+    }
+    try {
+      const formData = new FormData();
+      for (const { hex, side, blob } of results) {
+        formData.append('colorways', blob, `${hex}|${side}`);
+      }
+      const { product } = await api.adminSaveColorways(id, formData);
+      setColorImages(product.colorImages || {});
+      const shot = results.length / 2;
+      toast.success(`Shot ${shot} ${shot === 1 ? 'colour' : 'colours'}, front and back`);
+      if (failed?.length) toast.error(`${failed.length} could not be rendered`);
+    } catch (err) {
+      toast.error(err.message || 'Could not save the colour shots');
     }
   };
 
@@ -404,12 +437,16 @@ export default function AdminProductEdit() {
             {availableColors.length > 0 && (
               <div className="tk-chips-row">
                 <span className="tk-chips-label">Shipping in:</span>
-                {availableColors.map((hex) => (
-                  <span key={hex} className="tk-color-chip">
-                    <span className="tk-color-swatch" style={{ background: hex }} />
-                    {COLOR_NAMES[hex] || hex}
-                  </span>
-                ))}
+                {availableColors.map((hex) => {
+                  const shot = !!colorImages[hex.toUpperCase()] || !!colorImages[hex];
+                  return (
+                    <span key={hex} className="tk-color-chip" title={shot ? 'Front and back shots saved' : 'Not shot yet'}>
+                      <span className="tk-color-swatch" style={{ background: hex }} />
+                      {COLOR_NAMES[hex] || hex}
+                      {shot && <Check size={12} strokeWidth={3} style={{ marginLeft: 4, color: 'var(--success)' }} />}
+                    </span>
+                  );
+                })}
                 <button
                   type="button"
                   onClick={() => setAvailableColors([])}
@@ -427,8 +464,9 @@ export default function AdminProductEdit() {
             )}
             {availableColors.length > 0 && (
               <p className="tk-empty-note">
-                <Info size={13} /> These are the only colors the studio below will offer, so every
-                design is made against a blank you actually stock.
+                <Info size={13} /> These are the only colors the studio below will offer. Use
+                <strong> Shoot all colours</strong> in the studio to photograph the front and back of
+                each one — shoppers then see the shots for whichever swatch they pick.
               </p>
             )}
           </section>
@@ -700,6 +738,7 @@ export default function AdminProductEdit() {
                         onSnapshot={handleSnapshot}
                         saving={savingDesign}
                         availableColors={availableColors}
+                        onColorways={handleColorways}
                       />
                     )}
                   </Suspense>
@@ -716,6 +755,7 @@ export default function AdminProductEdit() {
                       onSnapshot={handleSnapshot}
                       saving={savingDesign}
                       availableColors={availableColors}
+                      onColorways={handleColorways}
                     />
                   </Suspense>
                 )}
