@@ -76,7 +76,7 @@ function orderRef(order) {
 }
 
 function itemLine(item) {
-  const extras = ['Unisex', item.size ? `Size ${item.size}` : null, item.color || null]
+  const extras = [item.productType === 'hat' ? 'Adjustable hat' : 'Unisex', item.size ? `Size ${item.size}` : null, item.color || null]
     .filter(Boolean)
     .join(' &middot; ');
 

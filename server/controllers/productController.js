@@ -2,6 +2,56 @@ const Product = require('../models/Product');
 const sharp = require('sharp');
 const storage = require('../utils/storage');
 
+const PRODUCT_SIZES = {
+  tshirt: ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'],
+  hat: ['One Size'],
+};
+
+function invalidProduct(message) {
+  const error = new Error(message);
+  error.statusCode = 400;
+  return error;
+}
+
+function parseDesign(value) {
+  if (value === undefined || value === null || value === '') return null;
+  let design;
+  try { design = typeof value === 'string' ? JSON.parse(value) : value; }
+  catch { throw invalidProduct('Design data must be valid JSON'); }
+  if (!design || typeof design !== 'object' || Array.isArray(design)) {
+    throw invalidProduct('Design data must be an object');
+  }
+  return design;
+}
+
+function resolveProductType(value, design, fallback = 'tshirt') {
+  const type = value || design?.productType || fallback;
+  if (!Object.hasOwn(PRODUCT_SIZES, type)) throw invalidProduct('Choose a T-shirt or hat product type');
+  if (design?.studio === 'truekin-unified' && design.productType !== type) {
+    throw invalidProduct('The studio design and product type must match');
+  }
+  return type;
+}
+
+function parseSizes(value, productType) {
+  let entries;
+  try { entries = typeof value === 'string' ? JSON.parse(value) : value; }
+  catch { throw invalidProduct('Sizes must be valid JSON'); }
+  if (!Array.isArray(entries)) throw invalidProduct('Sizes must be an array');
+  const seen = new Map();
+  for (const entry of entries) {
+    if (!PRODUCT_SIZES[productType].includes(entry?.size)) {
+      throw invalidProduct(`Unsupported size for ${productType === 'hat' ? 'hats' : 'T-shirts'}`);
+    }
+    const quantity = Number(entry.quantity || 0);
+    if (!Number.isInteger(quantity) || quantity < 0) throw invalidProduct('Stock must be a non-negative whole number');
+    const style = ['unisex', 'mens', 'womens'].includes(entry.style) ? entry.style : 'unisex';
+    const key = `${entry.size}_${style}`;
+    if (!seen.has(key)) seen.set(key, { size: entry.size, style, quantity, unlimited: entry.unlimited === true });
+  }
+  return Array.from(seen.values());
+}
+
 /**
  * Resize + re-encode an uploaded image, then hand the buffer to the storage
  * layer (Cloudflare R2, or local disk when R2 is not configured).
@@ -64,7 +114,10 @@ exports.getProduct = async (req, res) => {
 // Admin: Create product
 exports.createProduct = async (req, res) => {
   try {
-    const { title, description, price, featured } = req.body;
+    const { title, description, price, featured, active } = req.body;
+    const design = parseDesign(req.body.designData);
+    const productType = resolveProductType(req.body.productType, design);
+    const parsedSizes = parseSizes(req.body.sizes || [], productType);
     const imageUrls = [];
 
     if (req.files && req.files.length > 0) {
@@ -73,24 +126,10 @@ exports.createProduct = async (req, res) => {
       }
     }
 
-    const { editorType, availableColors, sizes } = req.body;
+    const { editorType, availableColors } = req.body;
     let colors = [];
     if (availableColors) {
       try { colors = JSON.parse(availableColors); } catch { colors = []; }
-    }
-    let parsedSizes = [];
-    if (sizes) {
-      try {
-        const raw = JSON.parse(sizes);
-        const seen = new Map();
-        for (const entry of raw) {
-          const key = `${entry.size}_${entry.style || 'unisex'}`;
-          if (!seen.has(key)) {
-            seen.set(key, { ...entry, style: entry.style || 'unisex' });
-          }
-        }
-        parsedSizes = Array.from(seen.values());
-      } catch { parsedSizes = []; }
     }
     // Truekin sells a single unisex cut — new products are never gendered.
     // The schema still permits the legacy values so existing documents save.
@@ -99,8 +138,12 @@ exports.createProduct = async (req, res) => {
       description,
       price: Math.round(parseFloat(price) * 100),
       imageUrls,
+      productType,
+      category: productType === 'hat' ? 'Hat' : 'T-Shirt',
+      designData: design ? JSON.stringify(design) : null,
       featured: featured === 'true' || featured === true,
-      editorType: editorType === '2d' ? '2d' : '3d',
+      active: active === undefined ? true : active === 'true' || active === true,
+      editorType: design?.studio === 'truekin-unified' ? '3d' : editorType === '2d' ? '2d' : '3d',
       shirtStyle: 'unisex',
       availableColors: colors,
       sizes: parsedSizes,
@@ -108,7 +151,7 @@ exports.createProduct = async (req, res) => {
 
     res.status(201).json({ product });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(error.statusCode || 500).json({ message: error.message });
   }
 };
 
@@ -122,29 +165,27 @@ exports.updateProduct = async (req, res) => {
       return res.status(404).json({ message: 'Product not found' });
     }
 
+    const design = parseDesign(req.body.designData === undefined ? product.designData : req.body.designData);
+    const productType = resolveProductType(req.body.productType, design, product.productType || 'tshirt');
+    product.productType = productType;
+    product.category = productType === 'hat' ? 'Hat' : 'T-Shirt';
+    if (req.body.designData !== undefined) product.designData = design ? JSON.stringify(design) : null;
+
     if (title) product.title = title;
     if (description) product.description = description;
     if (price !== undefined) product.price = Math.round(parseFloat(price) * 100);
     if (featured !== undefined) product.featured = featured === 'true' || featured === true;
     if (active !== undefined) product.active = active === 'true' || active === true;
     if (req.body.editorType) product.editorType = req.body.editorType;
+    if (design?.studio === 'truekin-unified') product.editorType = '3d';
     if (req.body.shirtStyle) product.shirtStyle = 'unisex';
     if (req.body.availableColors !== undefined) {
       try { product.availableColors = JSON.parse(req.body.availableColors); } catch { /* keep existing */ }
     }
     if (req.body.sizes !== undefined) {
-      try {
-        const parsed = JSON.parse(req.body.sizes);
-        // Deduplicate by size+style — keep first entry for each combo
-        const seen = new Map();
-        for (const entry of parsed) {
-          const key = `${entry.size}_${entry.style || 'unisex'}`;
-          if (!seen.has(key)) {
-            seen.set(key, { ...entry, style: entry.style || 'unisex' });
-          }
-        }
-        product.sizes = Array.from(seen.values());
-      } catch { /* keep existing */ }
+      product.sizes = parseSizes(req.body.sizes, productType);
+    } else if (req.body.productType) {
+      product.sizes = product.sizes.filter((entry) => PRODUCT_SIZES[productType].includes(entry.size));
     }
 
     // Handle new images
@@ -157,7 +198,7 @@ exports.updateProduct = async (req, res) => {
     await product.save();
     res.json({ product });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(error.statusCode || 500).json({ message: error.message });
   }
 };
 
@@ -247,13 +288,23 @@ exports.deleteProduct = async (req, res) => {
   }
 };
 
-// Admin: Save design (3D designer snapshot + designData JSON)
+// Admin: Save the unified design and its catalog snapshot.
 exports.saveDesign = async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
     if (!product) {
       return res.status(404).json({ message: 'Product not found' });
     }
+
+    const design = parseDesign(req.body.designData === undefined ? product.designData : req.body.designData);
+    const productType = resolveProductType(req.body.productType, design, product.productType || 'tshirt');
+    product.productType = productType;
+    product.category = productType === 'hat' ? 'Hat' : 'T-Shirt';
+    product.sizes = req.body.sizes === undefined
+      ? product.sizes.filter((entry) => PRODUCT_SIZES[productType].includes(entry.size))
+      : parseSizes(req.body.sizes, productType);
+    if (design?.studio === 'truekin-unified') product.editorType = '3d';
+    let staleImageUrl;
 
     // Save the design image (canvas snapshot PNG)
     if (req.files && req.files.designImage && req.files.designImage[0]) {
@@ -273,23 +324,24 @@ exports.saveDesign = async (req, res) => {
       // Add/replace design image as first product image
       const existingIdx = product.imageUrls.findIndex(url => url.includes(`design-${product._id}`));
       if (existingIdx >= 0) {
-        const stale = product.imageUrls[existingIdx];
+        staleImageUrl = product.imageUrls[existingIdx];
         product.imageUrls[existingIdx] = imgUrl;
-        await storage.deleteImage(stale);
       } else {
         product.imageUrls.unshift(imgUrl);
       }
     }
 
     // Save designData JSON
-    if (req.body.designData) {
-      product.designData = req.body.designData;
+    if (req.body.designData !== undefined) {
+      product.designData = design ? JSON.stringify(design) : null;
     }
 
     await product.save();
+    // Keep the last published snapshot available if saving the record fails.
+    if (staleImageUrl) await storage.deleteImage(staleImageUrl).catch(() => {});
     res.json({ product });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(error.statusCode || 500).json({ message: error.message });
   }
 };
 

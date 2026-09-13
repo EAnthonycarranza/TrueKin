@@ -9,7 +9,7 @@ export default function ProductCard({ product }) {
 
   return (
     <Link to={`/product/${product._id}`} className="tt-product-card">
-      <div className="tt-product-img">
+      <div className={`tt-product-img ${hasSecondImage ? 'has-alternate' : ''}`}>
         {product.imageUrls?.[0] ? (
           <>
             <img
@@ -67,8 +67,9 @@ export default function ProductCard({ product }) {
               )}
             </div>
           ) : (
-            <span className="tt-product-sub">Heat-pressed · Premium blank</span>
+            <span className="tt-product-sub">{product.productType === 'hat' ? 'Hat · Adjustable fit' : 'Heat-pressed · Premium blank'}</span>
           )}
+          {product.productType === 'hat' && colors.length > 0 && <span className="tt-product-sub">Hat</span>}
         </div>
       </div>
 
@@ -104,7 +105,8 @@ export default function ProductCard({ product }) {
           transition: opacity 0.4s var(--ease), transform 0.6s var(--ease);
         }
         .tt-product-img-hover { opacity: 0; }
-        .tt-product-card:hover .tt-product-img-main { transform: scale(1.06); opacity: 0; }
+        .tt-product-card:hover .tt-product-img-main { transform: scale(1.06); }
+        .tt-product-card:hover .has-alternate .tt-product-img-main { opacity: 0; }
         .tt-product-card:hover .tt-product-img-hover { opacity: 1; transform: scale(1.06); }
 
         .tt-product-featured {

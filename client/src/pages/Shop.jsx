@@ -18,7 +18,7 @@ const COLOR_OPTIONS = [
   { hex: '#FFC0CB', name: 'Pink' },
   { hex: '#8B4513', name: 'Brown' },
 ];
-const SIZE_OPTIONS = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
+const SIZE_OPTIONS = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', 'One Size'];
 // Colors that need a dark check mark (light swatches)
 const LIGHT_SWATCHES = new Set(['#FFFFFF', '#f7ec1e', '#FFC0CB']);
 
@@ -43,6 +43,7 @@ export default function Shop() {
   // Uses uppercase hex so '#ffffff' and '#FFFFFF' both match.
   const [selectedColors, setSelectedColors] = useState(() => new Set());
   const [selectedSizes, setSelectedSizes] = useState(() => new Set());
+  const [selectedType, setSelectedType] = useState('all');
 
   const toggleColor = (hex) => {
     setSelectedColors((prev) => {
@@ -64,6 +65,7 @@ export default function Shop() {
   const clearColorSize = () => {
     setSelectedColors(new Set());
     setSelectedSizes(new Set());
+    setSelectedType('all');
   };
 
   // Sync internal state when URL query params change (e.g. user clicks New Drop / The Kin)
@@ -135,8 +137,9 @@ export default function Shop() {
   // Within a group: OR (selecting Black + Red = products that come in either).
   // Across groups: AND (selected color AND selected size must both match).
   const filtered = useMemo(() => {
-    if (selectedColors.size === 0 && selectedSizes.size === 0) return products;
+    if (selectedColors.size === 0 && selectedSizes.size === 0 && selectedType === 'all') return products;
     return products.filter((p) => {
+      if (selectedType !== 'all' && (p.productType || 'tshirt') !== selectedType) return false;
       if (selectedColors.size > 0) {
         const have = new Set((p.availableColors || []).map(normHex));
         const anyMatch = [...selectedColors].some((c) => have.has(c));
@@ -149,9 +152,9 @@ export default function Shop() {
       }
       return true;
     });
-  }, [products, selectedColors, selectedSizes]);
+  }, [products, selectedColors, selectedSizes, selectedType]);
 
-  const hasColorSizeFilters = selectedColors.size > 0 || selectedSizes.size > 0;
+  const hasColorSizeFilters = selectedColors.size > 0 || selectedSizes.size > 0 || selectedType !== 'all';
 
   return (
     <div className="page shop-page">
@@ -173,6 +176,11 @@ export default function Shop() {
                   <button type="button" className="shop-chip" onClick={clearFeatured}>
                     The Kin · Featured only
                     <X size={12} />
+                  </button>
+                )}
+                {selectedType !== 'all' && (
+                  <button type="button" className="shop-chip" onClick={() => setSelectedType('all')}>
+                    {selectedType === 'hat' ? 'Hats' : 'T-Shirts'} <X size={12} />
                   </button>
                 )}
                 {[...selectedColors].map((hex) => {
@@ -225,7 +233,7 @@ export default function Shop() {
           <form onSubmit={handleSearch} className="shop-search">
             <Search size={17} />
             <input
-              placeholder="Search tees, designs, drops…"
+              placeholder="Search tees, hats, designs…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -332,26 +340,17 @@ export default function Shop() {
             </div>
 
             <div className="shop-filter-group">
-              <h4>Fit</h4>
-              <div
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '8px 12px',
-                  background: 'var(--ink, #0a0a0a)',
-                  color: '#f4f1ea',
-                  fontFamily: 'var(--font-secondary, "Oswald", sans-serif)',
-                  fontSize: 11,
-                  fontWeight: 700,
-                  letterSpacing: '0.18em',
-                  textTransform: 'uppercase',
-                  borderRadius: 4,
-                  border: '1px solid #1f1f1f',
-                }}
-              >
-                Unisex Only · One Cut
-              </div>
+              <h4>Product</h4>
+              {[
+                { value: 'all', label: 'All products' },
+                { value: 'tshirt', label: 'T-Shirts · Unisex fit' },
+                { value: 'hat', label: 'Hats · Adjustable fit' },
+              ].map(({ value, label }) => (
+                <label key={value} className="shop-filter-option">
+                  <input type="radio" name="product-type" checked={selectedType === value} onChange={() => setSelectedType(value)} />
+                  <span>{label}</span>
+                </label>
+              ))}
             </div>
 
             <div className="shop-filter-group">

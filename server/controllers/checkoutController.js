@@ -87,9 +87,10 @@ exports.createCheckoutSession = async (req, res) => {
         }
       }
 
+      const fitLabel = product.productType === 'hat' ? 'Adjustable' : 'Unisex';
       const itemName = item.size
-        ? `${product.title} (Unisex / ${item.size})`
-        : `${product.title} (Unisex)`;
+        ? `${product.title} (${fitLabel} / ${item.size})`
+        : `${product.title} (${fitLabel})`;
 
       lineItems.push({
         price_data: {
@@ -108,6 +109,7 @@ exports.createCheckoutSession = async (req, res) => {
 
       orderItems.push({
         product: product._id,
+        productType: product.productType || 'tshirt',
         title: product.title,
         price: product.price,
         quantity: item.quantity,

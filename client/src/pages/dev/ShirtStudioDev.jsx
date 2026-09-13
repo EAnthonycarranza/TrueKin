@@ -2,29 +2,37 @@
  * Dev-only playground for the 3D shirt studio (route: /dev/shirt-studio).
  * Only mounted when import.meta.env.DEV is true — never in production builds.
  */
-import { useState } from 'react';
-import Shirt3DStudio from '../../components/shirt3d/Shirt3DStudio';
-import Shirt3DPreview from '../../components/shirt3d/Shirt3DPreview';
+import { useEffect, useRef, useState } from 'react';
+import UnifiedStudio from '../../components/studio/UnifiedStudio';
+import UnifiedPreview from '../../components/studio/UnifiedPreview';
 
 export default function ShirtStudioDev() {
   const [saved, setSaved] = useState(null);
   const [shots, setShots] = useState([]);
+  const shotUrls = useRef([]);
+  useEffect(() => () => shotUrls.current.forEach(url => URL.revokeObjectURL(url)), []);
+  const capture = blob => {
+    const url = URL.createObjectURL(blob);
+    shotUrls.current.push(url);
+    setShots(prev => [url, ...prev].slice(0, 6));
+  };
 
   return (
     <div className="page">
-      <div className="container" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 1500, padding: '0 clamp(10px, 3vw, 40px)', margin: '0 auto' }}>
         <div>
-          <h1 style={{ margin: 0 }}>Shirt 3D Studio · dev</h1>
-          <p style={{ color: '#666', margin: '4px 0 0' }}>Local playground. Save → the customer preview below renders the saved design.</p>
+          <h1 style={{ margin: 0 }}>The creative playground</h1>
+          <p style={{ color: '#666', margin: '4px 0 0', fontSize: 13 }}>T-shirts and hats. One workspace, every angle. This playground does not change your catalog.</p>
         </div>
 
-        <Shirt3DStudio
+        <UnifiedStudio
           designData={null}
           onSave={(blob, state) => {
             setSaved(JSON.stringify(state));
-            setShots((prev) => [URL.createObjectURL(blob), ...prev].slice(0, 6));
+            capture(blob);
+            return { persisted: false, message: 'Preview updated. Your editable design is kept as a device draft; this playground does not publish products.' };
           }}
-          onSnapshot={(blob) => setShots((prev) => [URL.createObjectURL(blob), ...prev].slice(0, 6))}
+          onSnapshot={capture}
         />
 
         {shots.length > 0 && (
@@ -40,9 +48,9 @@ export default function ShirtStudioDev() {
 
         {saved && (
           <div>
-            <h3 style={{ margin: '0 0 8px' }}>Customer preview (Shirt3DPreview)</h3>
+            <h3 style={{ margin: '0 0 8px' }}>Saved customer preview</h3>
             <div style={{ maxWidth: 520 }}>
-              <Shirt3DPreview designData={saved} />
+              <UnifiedPreview designData={saved} />
             </div>
           </div>
         )}

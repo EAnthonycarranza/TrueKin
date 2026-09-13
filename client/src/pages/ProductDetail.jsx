@@ -15,6 +15,7 @@ const COLOR_NAMES = {
 
 const Shirt3DPreview = lazy(() => import('../components/shirt3d/Shirt3DPreview'));
 const Tshirt2DPreview = lazy(() => import('../components/designer/Tshirt2DPreview'));
+const UnifiedPreview = lazy(() => import('../components/studio/UnifiedPreview'));
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -125,6 +126,12 @@ export default function ProductDetail() {
   const hasDesign = !!product.designData;
   const hasImages = product.imageUrls.length > 0;
   const is2D = product.editorType === '2d';
+  const parsedDesign = (() => {
+    try { return typeof product.designData === 'string' ? JSON.parse(product.designData) : product.designData; }
+    catch { return null; }
+  })();
+  const isUnified = parsedDesign?.studio === 'truekin-unified';
+  const isHat = (product.productType || parsedDesign?.productType) === 'hat';
 
   const hasColors = product?.availableColors?.length > 0;
   const hasSizes = product?.sizes?.length > 0;
@@ -182,7 +189,7 @@ export default function ProductDetail() {
   };
 
   // Determine the preview label based on editor type
-  const previewLabel = is2D ? '2D View' : '3D View';
+  const previewLabel = isUnified ? 'Live Preview' : is2D ? '2D View' : '3D View';
 
   return (
     <div className="page product-detail-page">
@@ -197,7 +204,14 @@ export default function ProductDetail() {
                   <div className="spinner" />
                 </div>
               }>
-                {is2D ? (
+                {isUnified ? (
+                  <UnifiedPreview
+                    designData={product.designData}
+                    colorOverride={selectedColor}
+                    height={500}
+                    style={{ width: '100%', borderRadius: 12, overflow: 'hidden' }}
+                  />
+                ) : is2D ? (
                   <Tshirt2DPreview
                     designData={product.designData}
                     colorOverride={selectedColor}
@@ -344,7 +358,7 @@ export default function ProductDetail() {
                   <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
                   <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                 </svg>
-                Unisex Fit · One Cut For The Kin
+                {isHat ? 'Adjustable Hat · One Size' : 'Unisex Fit · One Cut For The Kin'}
               </div>
             </div>
 

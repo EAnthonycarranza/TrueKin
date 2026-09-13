@@ -21,6 +21,7 @@ export const useCartStore = create(
         if (existingIndex >= 0) {
           const newItems = [...items];
           newItems[existingIndex].quantity += quantity;
+          newItems[existingIndex].productType = product.productType || 'tshirt';
           set({ items: newItems });
         } else {
           set({
@@ -28,6 +29,7 @@ export const useCartStore = create(
               ...items,
               {
                 productId: product._id,
+                productType: product.productType || 'tshirt',
                 title: product.title,
                 price: product.price,
                 imageUrl: product.imageUrls[0] || '',

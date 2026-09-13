@@ -47,7 +47,7 @@ export default function Cart() {
                     </Link>
                     {(item.color || item.size || item.shirtStyle) && (
                       <p style={styles.itemMeta}>
-                        {item.shirtStyle && <>Unisex</>}
+                        {item.shirtStyle && <>{item.productType === 'hat' ? 'Adjustable hat' : 'Unisex'}</>}
                         {item.shirtStyle && item.size && ' · '}
                         {item.size && <>Size: {item.size}</>}
                         {(item.shirtStyle || item.size) && item.color && ' · '}

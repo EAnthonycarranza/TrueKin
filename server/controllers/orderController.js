@@ -303,6 +303,7 @@ function orderToRow(order) {
     color: i.color || null,
     size: i.size || null,
     shirtStyle: i.shirtStyle || 'unisex',
+    productType: i.productType || 'tshirt',
     imageUrl: i.imageUrl || '',
   }));
   return {
@@ -439,6 +440,7 @@ function orderFromRow(row) {
       color: i.color ?? null,
       size: i.size ?? null,
       shirtStyle: ['unisex', 'mens', 'womens'].includes(i.shirtStyle) ? i.shirtStyle : 'unisex',
+      productType: i.productType === 'hat' ? 'hat' : 'tshirt',
     })),
     totalAmount: total,
     fulfillmentMethod,

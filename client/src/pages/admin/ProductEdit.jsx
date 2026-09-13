@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   X, Save, ArrowLeft, Paintbrush, ChevronDown, ChevronUp,
-  Box, Layers, Upload, Check, AlertTriangle, Info, Ruler,
+  Box, Shirt, Upload, Check, AlertTriangle, Info, Ruler,
   Palette, Package, Sparkles, Users, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -13,6 +13,11 @@ import { ShieldMark } from '../../components/brand/Logo';
 import ImageCropModal from '../../components/ImageCropModal';
 
 const ALL_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
+const HAT_SIZES = ['One Size'];
+
+function readDesign(value) {
+  try { return typeof value === 'string' ? JSON.parse(value) : value; } catch { return null; }
+}
 
 const COLOR_NAMES = {
   '#FFFFFF': 'Bone', '#000000': 'Ink', '#929292': 'Stone',
@@ -21,12 +26,14 @@ const COLOR_NAMES = {
   '#1fd3ca': 'Turquoise', '#FFC0CB': 'Blush', '#8B4513': 'Sable',
 };
 
-const DesignerPanel = lazy(() => import('../../components/designer/DesignerPanel'));
-const Designer2DPanel = lazy(() => import('../../components/designer/Designer2DPanel'));
-const Shirt3DStudio = lazy(() => import('../../components/shirt3d/Shirt3DStudio'));
+const UnifiedStudio = lazy(() => import('../../components/studio/UnifiedStudio'));
 
 export default function AdminProductEdit() {
   const { id } = useParams();
+  return <ProductEditForm key={id || 'new'} id={id} />;
+}
+
+function ProductEditForm({ id }) {
   const navigate = useNavigate();
   const isEditing = Boolean(id);
 
@@ -38,6 +45,7 @@ export default function AdminProductEdit() {
     active: true,
   });
   const [editorType, setEditorType] = useState('3d');
+  const [productType, setProductType] = useState('tshirt');
   const [availableColors, setAvailableColors] = useState([]);
   const [colorImages, setColorImages] = useState({});
   const [sizes, setSizes] = useState([]); // [{ size, quantity, unlimited, style: 'unisex' }]
@@ -51,7 +59,10 @@ export default function AdminProductEdit() {
   const [savingDesign, setSavingDesign] = useState(false);
   const [showDesigner, setShowDesigner] = useState(false);
   const [designData, setDesignData] = useState(null);
-  const [legacy3D, setLegacy3D] = useState(false);
+  const [draftDesignBlob, setDraftDesignBlob] = useState(null);
+  const inventoryByType = useRef({});
+  const isHat = productType === 'hat';
+  const supportedSizes = isHat ? HAT_SIZES : ALL_SIZES;
 
   useEffect(() => {
     if (isEditing) {
@@ -69,6 +80,7 @@ export default function AdminProductEdit() {
           setExistingImages(p.imageUrls);
           setDesignData(p.designData || null);
           setEditorType(p.editorType || '3d');
+          setProductType(p.productType || readDesign(p.designData)?.productType || 'tshirt');
           setAvailableColors(p.availableColors || []);
           setColorImages(p.colorImages || {});
           // Collapse any legacy per-style inventory into a single unisex row per size
@@ -180,21 +192,29 @@ export default function AdminProductEdit() {
   };
 
   const handleSaveDesign = async (blob, designState) => {
+    const nextType = designState.productType === 'hat' ? 'hat' : 'tshirt';
+    const nextSupportedSizes = nextType === 'hat' ? HAT_SIZES : ALL_SIZES;
+    const nextSizes = sizes.filter((s) => nextSupportedSizes.includes(s.size));
+    setProductType(nextType);
+    setEditorType('3d');
     if (!isEditing) {
-      toast.error('Save the drop first, then save the design');
-      return;
+      setDesignData(JSON.stringify(designState));
+      setDraftDesignBlob(blob);
+      toast.success('Design ready — release the drop to save it with your product');
+      return { persisted: false, message: 'Design ready. Release the drop below to save it to your catalog. A device draft is kept until then.' };
     }
     setSavingDesign(true);
     try {
       const formData = new FormData();
       formData.append('designImage', blob, 'design.png');
       formData.append('designData', JSON.stringify(designState));
+      formData.append('productType', nextType);
+      formData.append('sizes', JSON.stringify(nextSizes));
       const result = await api.adminSaveDesign(id, formData);
       setDesignData(JSON.stringify(designState));
       setExistingImages(result.product.imageUrls);
+      setSizes(result.product.sizes || nextSizes);
       toast.success('Design pressed to the record');
-    } catch (err) {
-      toast.error(err.message);
     } finally {
       setSavingDesign(false);
     }
@@ -209,32 +229,36 @@ export default function AdminProductEdit() {
    */
   const handleColorways = async (results, failed) => {
     if (!isEditing) {
-      toast.error('Save the drop first, then shoot the colours');
-      return;
+      throw new Error('Save the drop first, then export colourways');
     }
     if (!results.length) {
-      toast.error('Nothing rendered — check the drop has colours selected');
-      return;
+      throw new Error('Nothing rendered — check the drop has colours selected');
     }
-    try {
-      const formData = new FormData();
-      for (const { hex, side, blob } of results) {
-        formData.append('colorways', blob, `${hex}|${side}`);
-      }
-      const { product } = await api.adminSaveColorways(id, formData);
-      setColorImages(product.colorImages || {});
-      const shot = results.length / 2;
-      toast.success(`Shot ${shot} ${shot === 1 ? 'colour' : 'colours'}, front and back`);
-      if (failed?.length) toast.error(`${failed.length} could not be rendered`);
-    } catch (err) {
-      toast.error(err.message || 'Could not save the colour shots');
+    const formData = new FormData();
+    for (const { hex, side, blob } of results) {
+      formData.append('colorways', blob, `${hex}|${side}`);
     }
+    const { product } = await api.adminSaveColorways(id, formData);
+    setColorImages(product.colorImages || {});
+    const shot = new Set(results.map(({ hex }) => hex)).size;
+    toast.success(`Saved ${results.length} views across ${shot} ${shot === 1 ? 'colour' : 'colours'}`);
+    if (failed?.length) toast.error(`${failed.length} could not be rendered`);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.title || !form.description || !form.price) {
       toast.error('Title, description, and price are required');
+      return;
+    }
+    if (snapshotBlobs.length + (draftDesignBlob ? 1 : 0) > 5) {
+      toast.error('Upload up to five new product shots at a time, including the studio design');
+      return;
+    }
+    const storedDesign = readDesign(designData);
+    if (storedDesign && (storedDesign.productType || 'tshirt') !== productType) {
+      setShowDesigner(true);
+      toast.error('Save the studio design for this product type before updating the drop');
       return;
     }
     setSaving(true);
@@ -246,11 +270,14 @@ export default function AdminProductEdit() {
       formData.append('featured', form.featured);
       formData.append('active', form.active);
       formData.append('editorType', editorType);
+      formData.append('productType', productType);
       formData.append('shirtStyle', 'unisex');
       formData.append('availableColors', JSON.stringify(availableColors));
       // Ensure every size carries style: 'unisex'
-      const normalizedSizes = sizes.map((s) => ({ ...s, style: 'unisex' }));
+      const normalizedSizes = sizes.filter((s) => supportedSizes.includes(s.size)).map((s) => ({ ...s, style: 'unisex' }));
       formData.append('sizes', JSON.stringify(normalizedSizes));
+      if (designData) formData.append('designData', typeof designData === 'string' ? designData : JSON.stringify(designData));
+      if (draftDesignBlob) formData.append('images', draftDesignBlob, 'studio-design.png');
       snapshotBlobs.forEach((blob, i) => {
         formData.append('images', blob, `snapshot-${i}.png`);
       });
@@ -269,15 +296,13 @@ export default function AdminProductEdit() {
     }
   };
 
-  const handleEditorTypeChange = (type) => {
-    if (type === editorType) return;
-    if (designData) {
-      const confirmSwitch = window.confirm(
-        'Switching editor types will not transfer the existing design. Continue?'
-      );
-      if (!confirmSwitch) return;
-    }
-    setEditorType(type);
+  const handleProductTypeChange = (type) => {
+    if (type === productType) return;
+    inventoryByType.current[productType] = sizes;
+    setProductType(type);
+    setSizes(inventoryByType.current[type] || (type === 'hat'
+      ? [{ size: 'One Size', style: 'unisex', quantity: 0, unlimited: false }]
+      : []));
   };
 
   const totalUnits = sizes.reduce((sum, s) => sum + (s.unlimited ? 0 : (s.quantity || 0)), 0);
@@ -316,13 +341,13 @@ export default function AdminProductEdit() {
             </h1>
             <span className="rule rule-brand" aria-hidden />
             <p className="tk-pe-sub">
-              Every Truekin tee is a <strong>unisex</strong> fit — one cut, built for the Kin.
-              Heat-pressed by hand on premium blanks from Bella + Canvas, Gildan, and Comfort Colors.
+              Build your next T-shirt or hat in one studio. Place artwork in 2D,
+              check every angle in 3D, and save the same design to your drop.
             </p>
           </div>
           <div className="tk-pe-hero-seal">
             <Users size={14} />
-            UNISEX FIT
+            {isHat ? 'ADJUSTABLE HAT' : 'UNISEX T-SHIRT'}
           </div>
         </header>
 
@@ -335,6 +360,21 @@ export default function AdminProductEdit() {
               sub="Name it, describe it, price it"
               icon={<Sparkles size={15} />}
             />
+            <fieldset className="tk-product-type">
+              <legend>Product type</legend>
+              <div className="tk-editor-grid">
+                <button type="button" onClick={() => handleProductTypeChange('tshirt')} className={`tk-editor-card ${!isHat ? 'on' : ''}`} aria-pressed={!isHat}>
+                  <Shirt size={26} />
+                  <span className="tk-editor-info"><span className="tk-editor-name">T-Shirt</span><span className="tk-editor-desc">Unisex fit · front, back and sleeves</span></span>
+                  {!isHat && <Check size={18} />}
+                </button>
+                <button type="button" onClick={() => handleProductTypeChange('hat')} className={`tk-editor-card ${isHat ? 'on' : ''}`} aria-pressed={isHat}>
+                  <Box size={26} />
+                  <span className="tk-editor-info"><span className="tk-editor-name">Hat</span><span className="tk-editor-desc">Adjustable fit · one size</span></span>
+                  {isHat && <Check size={18} />}
+                </button>
+              </div>
+            </fieldset>
             <div className="tk-pe-grid-2">
               <div className="tk-field">
                 <label>Title <span className="req">*</span></label>
@@ -370,11 +410,11 @@ export default function AdminProductEdit() {
                 rows={4}
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
-                placeholder="Heat-pressed by hand on a Bella + Canvas 3001 unisex tee. 100% ringspun cotton. Pre-shrunk, side-seamed, built to last."
+                placeholder={isHat ? 'Describe the hat blank, material, closure, fit, and decoration method.' : 'Heat-pressed by hand on a Bella + Canvas 3001 unisex tee. 100% ringspun cotton. Pre-shrunk, side-seamed, built to last.'}
                 required
               />
               <span className="tk-field-hint">
-                Name the blank (Bella + Canvas 3001 / Gildan 5000 / Comfort Colors 1717) and the press story.
+                {isHat ? 'Include the hat style, material, closure, and how the design is applied.' : 'Name the blank (Bella + Canvas 3001 / Gildan 5000 / Comfort Colors 1717) and the press story.'}
               </span>
             </div>
             <div className="tk-toggles">
@@ -465,7 +505,7 @@ export default function AdminProductEdit() {
             {availableColors.length > 0 && (
               <p className="tk-empty-note">
                 <Info size={13} /> These are the only colors the studio below will offer. Use
-                <strong> Shoot all colours</strong> in the studio to photograph the front and back of
+                <strong> Export colourways</strong> in the studio to photograph the available views of
                 each one — shoppers then see the shots for whichever swatch they pick.
               </p>
             )}
@@ -476,7 +516,7 @@ export default function AdminProductEdit() {
             <SectionHead
               num="03"
               title="The Cut & Inventory"
-              sub="One unisex fit · one inventory line"
+              sub={isHat ? 'Adjustable fit · one-size inventory' : 'One unisex fit · one inventory line'}
               icon={<Ruler size={15} />}
             />
 
@@ -485,10 +525,9 @@ export default function AdminProductEdit() {
                 <Users size={20} />
               </div>
               <div>
-                <strong>Unisex fit only.</strong>
+                <strong>{isHat ? 'One adjustable size.' : 'Unisex fit only.'}</strong>
                 <p>
-                  Truekin tees are cut on one unisex last — no Men's vs. Women's SKUs.
-                  Enable the sizes you'll stock, set quantities for each.
+                  {isHat ? 'Stock your adjustable hats in One Size. Set the number of blanks available or enable made-to-order inventory.' : "Truekin tees share one unisex fit. Enable the sizes you'll stock and set quantities for each."}
                 </p>
               </div>
               <div className="tk-unisex-banner-stat">
@@ -505,7 +544,7 @@ export default function AdminProductEdit() {
 
             {/* Size pills */}
             <div className="tk-size-pills">
-              {ALL_SIZES.map((size) => {
+              {supportedSizes.map((size) => {
                 const isEnabled = sizes.some((s) => s.size === size);
                 return (
                   <button
@@ -538,11 +577,11 @@ export default function AdminProductEdit() {
                   className="tk-btn-outline"
                   onClick={() =>
                     setSizes(
-                      ALL_SIZES.map((s) => ({ size: s, style: 'unisex', quantity: 0, unlimited: false }))
+                      supportedSizes.map((s) => ({ size: s, style: 'unisex', quantity: 0, unlimited: false }))
                     )
                   }
                 >
-                  Enable All Sizes
+                  {isHat ? 'Enable One Size' : 'Enable All Sizes'}
                 </button>
               </div>
             ) : (
@@ -553,14 +592,14 @@ export default function AdminProductEdit() {
                   <span>Quantity</span>
                   <span>Unlimited</span>
                 </div>
-                {ALL_SIZES.filter((s) => sizes.some((sz) => sz.size === s)).map((sizeName) => {
+                {supportedSizes.filter((s) => sizes.some((sz) => sz.size === s)).map((sizeName) => {
                   const entry = sizes.find((s) => s.size === sizeName);
                   if (!entry) return null;
                   return (
                     <div key={sizeName} className="tk-inv-row">
                       <span className="tk-inv-size">{sizeName}</span>
                       <span className="tk-inv-fit">
-                        <Users size={12} /> Unisex
+                        <Users size={12} /> {isHat ? 'Adjustable' : 'Unisex'}
                       </span>
                       <div>
                         <input
@@ -614,62 +653,18 @@ export default function AdminProductEdit() {
                     className="tk-link"
                     onClick={() => {
                       setSizes(
-                        ALL_SIZES.map((s) => {
+                        supportedSizes.map((s) => {
                           const existing = sizes.find((sz) => sz.size === s);
                           return existing || { size: s, style: 'unisex', quantity: 0, unlimited: false };
                         })
                       );
                     }}
                   >
-                    Enable all sizes
+                    {isHat ? 'Enable One Size' : 'Enable all sizes'}
                   </button>
                 </div>
               </div>
             )}
-          </section>
-
-          {/* Editor pick */}
-          <section className="tk-pe-card">
-            <SectionHead
-              num="04"
-              title="The Studio"
-              sub="Pick your design canvas"
-              icon={<Paintbrush size={15} />}
-            />
-            <div className="tk-editor-grid">
-              <button
-                type="button"
-                onClick={() => handleEditorTypeChange('3d')}
-                className={`tk-editor-card ${editorType === '3d' ? 'on' : ''}`}
-              >
-                <div className="tk-editor-icon">
-                  <Box size={26} />
-                </div>
-                <div className="tk-editor-info">
-                  <span className="tk-editor-name">3D Press Studio</span>
-                  <span className="tk-editor-desc">
-                    Colour-matched 3D: the tee is shaded from the same mockup photo as the 2D canvas, and prints land in the same spot. Customers rotate it on the product page.
-                  </span>
-                </div>
-                {editorType === '3d' && <span className="tk-editor-badge">Selected</span>}
-              </button>
-              <button
-                type="button"
-                onClick={() => handleEditorTypeChange('2d')}
-                className={`tk-editor-card ${editorType === '2d' ? 'on' : ''}`}
-              >
-                <div className="tk-editor-icon">
-                  <Layers size={26} />
-                </div>
-                <div className="tk-editor-info">
-                  <span className="tk-editor-name">2D Mockup Studio</span>
-                  <span className="tk-editor-desc">
-                    Flat mockups for front, back and both sleeves — lighter, faster, no 3D model needed.
-                  </span>
-                </div>
-                {editorType === '2d' && <span className="tk-editor-badge">Selected</span>}
-              </button>
-            </div>
           </section>
 
           {/* Designer */}
@@ -677,14 +672,22 @@ export default function AdminProductEdit() {
             <div
               className="tk-designer-head"
               onClick={() => setShowDesigner(!showDesigner)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  setShowDesigner((open) => !open);
+                }
+              }}
               role="button"
               tabIndex={0}
+              aria-expanded={showDesigner}
+              aria-controls="product-unified-studio"
             >
               <div>
                 <SectionHead
-                  num="05"
-                  title={editorType === '3d' ? 'The Press (3D)' : 'The Press (2D)'}
-                  sub={designData ? 'Design saved · ready to ship' : 'Cut, place, and press the design'}
+                  num="04"
+                  title="Truekin Studio"
+                  sub={designData ? 'One design · edit in 2D, preview in 3D' : 'T-shirts and hats · one connected workspace'}
                   icon={<Paintbrush size={15} />}
                   inline
                 />
@@ -692,7 +695,7 @@ export default function AdminProductEdit() {
               <div className="tk-designer-head-right">
                 {designData && (
                   <span className="tk-saved-pill">
-                    <Check size={12} /> Design Saved
+                    <Check size={12} /> {draftDesignBlob ? 'Design Ready' : 'Design Saved'}
                   </span>
                 )}
                 {showDesigner ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
@@ -700,65 +703,32 @@ export default function AdminProductEdit() {
             </div>
 
             {showDesigner && (
-              <div className="tk-designer-body">
+              <div className="tk-designer-body" id="product-unified-studio">
                 {!isEditing && (
                   <div className="tk-callout">
                     <AlertTriangle size={14} />
-                    Save the drop first to enable the "Save Design" button. You can still capture snapshot images.
+                    Save your design in the studio, then release the drop below to add it to your catalog.
                   </div>
                 )}
 
-                {editorType === '3d' ? (
-                  <Suspense fallback={
-                    <div className="tk-loading-block">
-                      <div className="spinner" />
-                      <p>Loading 3D studio…</p>
-                    </div>
-                  }>
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => setLegacy3D((v) => !v)}
-                      >
-                        {legacy3D ? 'Use colour-matched 3D studio' : 'Use legacy 3D press'}
-                      </button>
-                    </div>
-                    {legacy3D ? (
-                      <DesignerPanel
-                        designData={designData}
-                        onSave={handleSaveDesign}
-                        onSnapshot={handleSnapshot}
-                        saving={savingDesign}
-                      />
-                    ) : (
-                      <Shirt3DStudio
-                        designData={designData}
-                        onSave={handleSaveDesign}
-                        onSnapshot={handleSnapshot}
-                        saving={savingDesign}
-                        availableColors={availableColors}
-                        onColorways={handleColorways}
-                      />
-                    )}
-                  </Suspense>
-                ) : (
-                  <Suspense fallback={
-                    <div className="tk-loading-block">
-                      <div className="spinner" />
-                      <p>Loading 2D studio…</p>
-                    </div>
-                  }>
-                    <Designer2DPanel
-                      designData={designData}
-                      onSave={handleSaveDesign}
-                      onSnapshot={handleSnapshot}
-                      saving={savingDesign}
-                      availableColors={availableColors}
-                      onColorways={handleColorways}
-                    />
-                  </Suspense>
-                )}
+                <Suspense fallback={
+                  <div className="tk-loading-block">
+                    <div className="spinner" />
+                    <p>Loading Truekin Studio…</p>
+                  </div>
+                }>
+                  <UnifiedStudio
+                    designData={designData}
+                    productType={productType}
+                    onProductTypeChange={handleProductTypeChange}
+                    draftKey={`product-${id || 'new'}`}
+                    onSave={handleSaveDesign}
+                    onSnapshot={handleSnapshot}
+                    saving={savingDesign}
+                    availableColors={availableColors}
+                    onColorways={isEditing ? handleColorways : undefined}
+                  />
+                </Suspense>
               </div>
             )}
           </section>
@@ -766,7 +736,7 @@ export default function AdminProductEdit() {
           {/* Product images */}
           <section className="tk-pe-card">
             <SectionHead
-              num="06"
+              num="05"
               title="The Shots"
               sub="Lifestyle + press-ready photography"
               icon={<Upload size={15} />}
@@ -878,7 +848,7 @@ export default function AdminProductEdit() {
                   {isEditing ? 'Update' : 'Release'} the drop
                 </span>
                 <span className="tk-submit-meta">
-                  Unisex fit · {availableColors.length || 0} colors · {sizes.length} sizes
+                  {isHat ? 'Adjustable hat' : 'Unisex T-shirt'} · {availableColors.length || 0} colors · {sizes.length} {sizes.length === 1 ? 'size' : 'sizes'}
                 </span>
               </div>
             </div>
@@ -893,7 +863,7 @@ export default function AdminProductEdit() {
               <button
                 type="submit"
                 className="tk-btn-primary"
-                disabled={saving}
+                disabled={saving || savingDesign}
               >
                 <Save size={16} />
                 {saving ? 'Pressing…' : isEditing ? 'Update Drop' : 'Release Drop'}
@@ -954,6 +924,10 @@ export default function AdminProductEdit() {
 
       <style>{`
         .tk-pe { max-width: 1180px; }
+        .tk-product-type { border: 0; padding: 0; margin: 0 0 26px; min-width: 0; }
+        .tk-product-type legend { font-weight: 700; font-size: 13px; margin-bottom: 10px; }
+        .tk-product-type .tk-editor-grid { margin: 0; }
+        .tk-product-type .tk-editor-info { display: grid; gap: 4px; }
 
         .tk-pe-back {
           display: inline-flex;

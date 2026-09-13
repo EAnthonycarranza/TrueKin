@@ -31,6 +31,7 @@ const orderItemSchema = new mongoose.Schema({
   imageUrl: String,
   color: { type: String, default: null },
   size: { type: String, default: null },
+  productType: { type: String, enum: ['tshirt', 'hat'], default: 'tshirt' },
   shirtStyle: { type: String, enum: ['unisex', 'mens', 'womens'], default: 'unisex' },
 });
 

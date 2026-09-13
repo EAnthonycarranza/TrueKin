@@ -23,6 +23,11 @@ const productSchema = new mongoose.Schema({
     type: String,
     default: 'T-Shirt',
   },
+  productType: {
+    type: String,
+    enum: ['tshirt', 'hat'],
+    default: 'tshirt',
+  },
   featured: {
     type: Boolean,
     default: false,
@@ -68,7 +73,7 @@ const productSchema = new mongoose.Schema({
   sizes: [{
     size: {
       type: String,
-      enum: ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'],
+      enum: ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', 'One Size'],
       required: true,
     },
     style: {
@@ -91,6 +96,7 @@ const productSchema = new mongoose.Schema({
 // Ensure sizes always include 'style' in JSON output (back-fills old docs missing it)
 productSchema.set('toJSON', {
   transform: (doc, ret) => {
+    ret.productType = ret.productType || 'tshirt';
     if (ret.sizes) {
       ret.sizes = ret.sizes.map((s) => ({
         ...s,

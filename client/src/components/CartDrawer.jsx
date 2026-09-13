@@ -84,7 +84,7 @@ export default function CartDrawer() {
                   </div>
                   {(item.color || item.size || item.shirtStyle) && (
                     <p className="cart-item-meta">
-                      {item.shirtStyle && <>Unisex</>}
+                      {item.shirtStyle && <>{item.productType === 'hat' ? 'Adjustable hat' : 'Unisex'}</>}
                       {item.shirtStyle && (item.color || item.size) && ' · '}
                       {item.color && (
                         <>
