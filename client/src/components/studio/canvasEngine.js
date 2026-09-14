@@ -1,6 +1,7 @@
 import * as fabric from 'fabric';
 import { BOARD, SURFACES, printRect, makeHistory, serializableDocument } from './studioDocument';
 import { loadFabricAssetImage, loadFabricImageFromFile } from '../designer/designerHelpers';
+import { createSnapSession, resetSnapSession, solveMoveSnap, solveAngleSnap } from './smartSnapping';
 
 const PROPS = ['studioId', 'studioName', 'studioLocked', 'assetTone', 'assetAltSrc', 'inkLocked'];
 const uid = () => crypto.randomUUID();
@@ -34,11 +35,14 @@ function exportPrint(canvas, rect, multiplier = 3) {
 }
 
 export default class CanvasEngine {
-  constructor(element, document, onChange, onError) {
+  constructor(element, document, onChange, onError, onSnap) {
     this.document = structuredClone(document);
     this.view = 'front';
     this.onChange = onChange;
     this.onError = onError;
+    this.onSnap = onSnap;
+    this.snapSession = createSnapSession();
+    this.snapFeedback = null;
     this.loading = true;
     this.failed = false;
     this.disposed = false;
@@ -54,6 +58,7 @@ export default class CanvasEngine {
     this.canvas.upperCanvasEl.tabIndex = 0;
     this.canvas.upperCanvasEl.setAttribute('aria-label', 'Design canvas. Select artwork to move or resize it.');
     const selection = () => {
+      this.clearSnapping();
       const active = this.selected;
       if (active?.type === 'activeselection') {
         active.studioLocked = active.getObjects().some(item => item.studioLocked);
@@ -64,27 +69,105 @@ export default class CanvasEngine {
     this.canvas.on('selection:created', selection);
     this.canvas.on('selection:updated', selection);
     this.canvas.on('selection:cleared', selection);
-    this.canvas.on('object:modified', () => this.commit());
+    this.canvas.on('object:modified', () => { this.finishSnapping(); this.commit(); });
     this.canvas.on('text:changed', () => { clearTimeout(this.textTimer); this.textTimer = setTimeout(() => this.commit(), 220); });
     this.canvas.on('mouse:down', () => {
+      this.clearSnapping();
       if (!this.canvas.getActiveObject()?.isEditing) this.canvas.upperCanvasEl.focus({ preventScroll: true });
     });
-    this.canvas.on('object:moving', ({ target }) => {
-      if (this.snap) {
-        const r = this.rect;
-        const center = target.getCenterPoint();
-        if (Math.abs(center.x - (r.left + r.width / 2)) < 9) target.setPositionByOrigin(new fabric.Point(r.left + r.width / 2, center.y), 'center', 'center');
-        const nextCenter = target.getCenterPoint();
-        if (Math.abs(nextCenter.y - (r.top + r.height / 2)) < 9) target.setPositionByOrigin(new fabric.Point(nextCenter.x, r.top + r.height / 2), 'center', 'center');
-      }
-      clearTimeout(this.previewTimer);
-      this.previewTimer = setTimeout(() => this.sync(), 65);
-    });
+    this.canvas.on('mouse:up', () => this.finishSnapping());
+    this.canvas.on('object:moving', event => { this.snapMove(event); this.schedulePreview(); });
+    this.canvas.on('object:rotating', event => { this.snapRotation(event); this.schedulePreview(); });
+    this.canvas.on('object:scaling', () => { this.clearSnapping(); this.schedulePreview(); });
     this.ready = this.initialize();
   }
 
   get rect() { return printRect(this.document.productType, this.view); }
   get selected() { return this.canvas.getActiveObject(); }
+
+  schedulePreview() {
+    clearTimeout(this.previewTimer);
+    this.previewTimer = setTimeout(() => this.sync(), 65);
+  }
+
+  publishSnap(value) {
+    // Guide updates stay outside the document/history and the parent React tree.
+    const key = JSON.stringify(value);
+    if (key === this.snapFeedbackKey) return;
+    this.snapFeedbackKey = key;
+    this.snapFeedback = value;
+    if (!this.disposed) this.onSnap?.(value);
+  }
+
+  clearSnapping() {
+    clearTimeout(this.snapTimer);
+    resetSnapSession(this.snapSession);
+    this.snapTarget = null;
+    this.publishSnap(null);
+  }
+
+  setSnap(enabled) {
+    this.snap = !!enabled;
+    if (!this.snap) this.clearSnapping();
+  }
+
+  prepareSnap(target) {
+    if (!target || target.studioLocked || this.loading || this.failed || this.disposed) { this.clearSnapping(); return false; }
+    clearTimeout(this.snapTimer);
+    if (this.snapTarget !== target) { resetSnapSession(this.snapSession); this.snapTarget = target; }
+    target.setCoords();
+    return true;
+  }
+
+  snapMove({ target, e }) {
+    if (!this.prepareSnap(target)) return;
+    // A multi-selection snaps as one box, never against its own members.
+    const active = new Set([target, ...this.canvas.getActiveObjects(), ...(target.type === 'activeselection' ? target.getObjects() : [])]);
+    const peers = this.canvas.getObjects().filter(item => !active.has(item) && item.visible !== false && item.opacity !== 0).map(item => {
+      item.setCoords();
+      return { id: item.studioId, name: item.studioName, box: item.getBoundingRect() };
+    });
+    const result = solveMoveSnap({ box: target.getBoundingRect(), area: this.rect, peers, session: this.snapSession,
+      scale: (this.displayWidth || 450) / BOARD.width, bypass: !this.snap || !!e?.altKey });
+    if (result.dx || result.dy) {
+      target.set({ left: target.left + result.dx, top: target.top + result.dy });
+      target.setCoords();
+    }
+    this.publishSnap(result.guides.length ? { ...result, phase: 'dragging' } : null);
+  }
+
+  snapRotation({ target, e }) {
+    if (!this.prepareSnap(target)) return;
+    this.snapSession.x = this.snapSession.y = null;
+    const result = solveAngleSnap({ angle: target.angle || 0, session: this.snapSession, bypass: !this.snap || !!e?.altKey });
+    if (result.snapped) { target.rotate(result.angle); target.setCoords(); }
+    this.publishSnap(result.snapped ? { angle: result.angle, label: result.label, guides: [], lockedAxes: [], phase: 'dragging' } : null);
+  }
+
+  finishSnapping() {
+    resetSnapSession(this.snapSession);
+    this.snapTarget = null;
+    if (!this.snapFeedback) return;
+    this.publishSnap({ ...this.snapFeedback, phase: 'settled' });
+    clearTimeout(this.snapTimer);
+    this.snapTimer = setTimeout(() => this.clearSnapping(), 1800);
+  }
+
+  showAlignment(value) {
+    if (!this.snap) return;
+    const r = this.rect;
+    const horizontal = ['left', 'center', 'right'].includes(value);
+    const center = value === 'center' || value === 'middle';
+    const at = horizontal
+      ? r.left + (value === 'left' ? 0 : value === 'right' ? r.width : r.width / 2)
+      : r.top + (value === 'top' ? 0 : value === 'bottom' ? r.height : r.height / 2);
+    const axis = horizontal ? 'x' : 'y';
+    const label = center ? `Centered ${horizontal ? 'horizontally' : 'vertically'}` : `Aligned to print ${value}`;
+    this.publishSnap({ label, lockedAxes: [axis], phase: 'settled', guides: [{ axis, at,
+      from: horizontal ? r.top : r.left, to: horizontal ? r.top + r.height : r.left + r.width,
+      kind: center ? 'center' : 'edge', label }] });
+    this.finishSnapping();
+  }
 
   async initialize() {
     try {
@@ -109,6 +192,7 @@ export default class CanvasEngine {
 
   async loadView(view) {
     if (this.disposed) return;
+    this.clearSnapping();
     if (!this.loading) this.sync();
     const previousView = this.view;
     const epoch = ++this.epoch;
@@ -243,6 +327,7 @@ export default class CanvasEngine {
     if (this.loading || this.disposed || this.failed) return;
     const object = this.selected;
     if (!object || object.studioLocked) return;
+    this.clearSnapping();
     object.set(values);
     if (object.type === 'activeselection' && values.opacity !== undefined) {
       object.set({ opacity: 1 });
@@ -256,6 +341,7 @@ export default class CanvasEngine {
 
   command(action, value) {
     if (this.loading || this.disposed || this.failed) return;
+    this.clearSnapping();
     const c = this.canvas, o = this.selected;
     if (action === 'select') { const item = c.getObjects().find(x => x.studioId === value); if (item) c.setActiveObject(item); c.requestRenderAll(); this.notify(); return; }
     if (action === 'deselect') { c.discardActiveObject(); c.requestRenderAll(); return; }
@@ -319,6 +405,7 @@ export default class CanvasEngine {
       o.set({ left: o.left + x, top: o.top + y });
     }
     o.setCoords(); c.requestRenderAll(); this.commit();
+    if (action === 'align') this.showAlignment(value);
   }
 
   async history(direction) {
@@ -348,6 +435,7 @@ export default class CanvasEngine {
 
   resize(width) {
     if (!width || this.disposed) return;
+    if (width !== this.displayWidth) this.clearSnapping();
     this.displayWidth = width;
     this.canvas.setDimensions({ width: `${width}px`, height: `${width * BOARD.height / BOARD.width}px` }, { cssOnly: true });
     this.updateControlSizes();
@@ -360,6 +448,7 @@ export default class CanvasEngine {
   }
 
   dispose() {
+    this.clearSnapping();
     this.disposed = true; this.epoch++;
     clearTimeout(this.previewTimer); clearTimeout(this.textTimer);
     return this.canvas.dispose();

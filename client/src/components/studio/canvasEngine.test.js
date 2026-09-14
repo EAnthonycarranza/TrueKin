@@ -9,13 +9,198 @@ import CanvasEngine from './canvasEngine.js';
 import { BOARD, emptyDocument, normalizeDocument } from './studioDocument.js';
 
 async function createEngine(t, document = emptyDocument()) {
-  const changes = [], errors = [];
+  const changes = [], errors = [], snaps = [];
   const node = fabric.getEnv().document.createElement('canvas');
-  const engine = new CanvasEngine(node, document, value => changes.push(value), error => errors.push(error));
+  const engine = new CanvasEngine(node, document, value => changes.push(value), error => errors.push(error), value => snaps.push(value));
   t.after(async () => { if (!engine.disposed) await engine.dispose(); });
   await engine.ready;
-  return { engine, changes, errors };
+  return { engine, changes, errors, snaps };
 }
+
+function addSnapRectangle(engine, values = {}) {
+  engine.add(new fabric.Rect({ width: 40, height: 40, fill: '#245846', strokeWidth: 0 }), 'Snap artwork');
+  engine.update({ scaleX: 1, scaleY: 1, ...values });
+  return engine.selected;
+}
+
+function moveArtwork(engine, object, values, event = {}) {
+  object.set(values);
+  object.setCoords();
+  engine.canvas.fire('object:moving', { target: object, e: event });
+}
+
+function near(actual, expected, message) {
+  assert.ok(Math.abs(actual - expected) < 0.001, message || `expected ${actual} to equal ${expected}`);
+}
+
+test('native dragging locks both print-center axes and publishes transient guide feedback', async t => {
+  const { engine, snaps } = await createEngine(t);
+  engine.resize(900);
+  const object = addSnapRectangle(engine);
+  const cx = engine.rect.left + engine.rect.width / 2;
+  const cy = engine.rect.top + engine.rect.height / 2;
+  engine.canvas.fire('mouse:down', {});
+  moveArtwork(engine, object, { left: cx + 4, top: cy - 3 });
+  near(object.getCenterPoint().x, cx);
+  near(object.getCenterPoint().y, cy);
+  assert.equal(snaps.at(-1).phase, 'dragging');
+  assert.deepEqual([...snaps.at(-1).lockedAxes].sort(), ['x', 'y']);
+  assert.equal(snaps.at(-1).guides.length, 2);
+  assert.equal(object.studioLocked, undefined, 'alignment is magnetic placement, not a permanently locked layer');
+  assert.equal(object.lockMovementX, false);
+  assert.equal(object.lockMovementY, false);
+});
+
+test('snap capture uses the same visible pixel distance at desktop and mobile canvas widths', async t => {
+  const { engine, snaps } = await createEngine(t);
+  const object = addSnapRectangle(engine, { width: 80, height: 60, top: 330 });
+  const cx = engine.rect.left + engine.rect.width / 2;
+  for (const width of [900, 450, 270]) {
+    engine.resize(width);
+    const scale = width / BOARD.width;
+    engine.canvas.fire('mouse:down', {});
+    moveArtwork(engine, object, { left: cx + 6 / scale, top: 330 });
+    near(object.left, cx, `six visible pixels must capture at ${width}px canvas width`);
+    assert.ok(snaps.at(-1).lockedAxes.includes('x'));
+    engine.canvas.fire('mouse:down', {});
+    const outside = cx + 20 / scale;
+    moveArtwork(engine, object, { left: outside, top: 330 });
+    near(object.left, outside, `twenty visible pixels must not capture at ${width}px canvas width`);
+    assert.ok(!snaps.at(-1)?.lockedAxes.includes('x'));
+  }
+});
+
+test('native dragging aligns peer edges and centers while ignoring hidden and transparent peers', async t => {
+  const { engine, snaps } = await createEngine(t);
+  engine.resize(900);
+  const peer = addSnapRectangle(engine, { left: 340, top: 300, width: 80, height: 60 });
+  const object = addSnapRectangle(engine, { left: 329, top: 550, width: 50, height: 50 });
+  engine.canvas.fire('mouse:down', {});
+  moveArtwork(engine, object, { left: 329, top: 550 });
+  near(object.getBoundingRect().left, peer.getBoundingRect().left, 'left edges align with another visible layer');
+  assert.ok(snaps.at(-1).lockedAxes.includes('x'));
+  engine.canvas.fire('mouse:down', {});
+  moveArtwork(engine, object, { left: 344, top: 550 });
+  near(object.getCenterPoint().x, peer.getCenterPoint().x, 'horizontal centers align with another visible layer');
+  for (const visibility of [{ visible: false, opacity: 1 }, { visible: true, opacity: 0 }]) {
+    peer.set(visibility);
+    engine.canvas.fire('mouse:down', {});
+    moveArtwork(engine, object, { left: 344, top: 550 });
+    near(object.left, 344);
+    assert.equal(snaps.at(-1), null, 'non-rendered artwork must not create a magnetic guide');
+  }
+});
+
+test('multi-selection snaps as a unit without using its own children as guide targets', async t => {
+  const { engine, snaps } = await createEngine(t);
+  engine.resize(900);
+  addSnapRectangle(engine, { left: 360, top: 320 });
+  addSnapRectangle(engine, { left: 420, top: 380 });
+  engine.command('selectAll');
+  const selection = engine.selected;
+  assert.equal(selection.type, 'activeselection');
+  engine.canvas.fire('mouse:down', {});
+  const position = { left: selection.left, top: selection.top };
+  moveArtwork(engine, selection, position);
+  near(selection.left, position.left);
+  near(selection.top, position.top);
+  assert.equal(snaps.at(-1), null, 'selected member bounds cannot snap back onto their parent bounds');
+  const cx = engine.rect.left + engine.rect.width / 2;
+  const cy = engine.rect.top + engine.rect.height / 2;
+  moveArtwork(engine, selection, { left: cx + 3, top: cy - 4 });
+  near(selection.getCenterPoint().x, cx);
+  near(selection.getCenterPoint().y, cy);
+  assert.deepEqual([...snaps.at(-1).lockedAxes].sort(), ['x', 'y']);
+  assert.equal(selection.getObjects().length, 2);
+});
+
+test('Alt bypass and switching snapping off release guides immediately without locking artwork', async t => {
+  const { engine, snaps } = await createEngine(t);
+  engine.resize(900);
+  const object = addSnapRectangle(engine);
+  const cx = engine.rect.left + engine.rect.width / 2;
+  const cy = engine.rect.top + engine.rect.height / 2;
+  moveArtwork(engine, object, { left: cx + 3, top: cy + 4 });
+  assert.ok(snaps.at(-1));
+  moveArtwork(engine, object, { left: cx + 3, top: cy + 4 }, { altKey: true });
+  near(object.left, cx + 3);
+  near(object.top, cy + 4);
+  assert.equal(snaps.at(-1), null);
+  moveArtwork(engine, object, { left: cx + 3, top: cy + 4 });
+  assert.ok(snaps.at(-1));
+  engine.setSnap(false);
+  assert.equal(snaps.at(-1), null);
+  moveArtwork(engine, object, { left: cx + 3, top: cy + 4 });
+  near(object.left, cx + 3);
+  near(object.top, cy + 4);
+  assert.equal(snaps.at(-1), null);
+  engine.setSnap(true);
+  moveArtwork(engine, object, { left: cx + 3, top: cy + 4 });
+  near(object.left, cx);
+  near(object.top, cy);
+  assert.equal(object.studioLocked, undefined);
+});
+
+test('mouse release confirms placement and surface changes clear the settled snap state', async t => {
+  const { engine, snaps } = await createEngine(t);
+  const object = addSnapRectangle(engine);
+  moveArtwork(engine, object, { left: 453, top: 443 });
+  assert.equal(snaps.at(-1).phase, 'dragging');
+  engine.canvas.fire('object:modified', { target: object });
+  engine.canvas.fire('mouse:up', { target: object });
+  assert.equal(snaps.at(-1).phase, 'settled');
+  await engine.loadView('back');
+  assert.equal(snaps.at(-1), null);
+  assert.equal(engine.snapFeedback, null);
+  await engine.loadView('front');
+  near(engine.canvas.getObjects()[0].left, 450);
+  near(engine.canvas.getObjects()[0].top, 440);
+});
+
+test('native rotation locks useful angles, supports Alt, and clears when scaling begins', async t => {
+  const { engine, snaps } = await createEngine(t);
+  const object = addSnapRectangle(engine);
+  object.set({ angle: 88 });
+  engine.canvas.fire('object:rotating', { target: object, e: {} });
+  near(object.angle, 90);
+  assert.equal(snaps.at(-1).angle, 90);
+  assert.equal(snaps.at(-1).phase, 'dragging');
+  object.set({ angle: 88 });
+  engine.canvas.fire('object:rotating', { target: object, e: { altKey: true } });
+  near(object.angle, 88);
+  assert.equal(snaps.at(-1), null);
+  object.set({ angle: 2 });
+  engine.canvas.fire('object:rotating', { target: object, e: {} });
+  near(object.angle, 0);
+  assert.ok(snaps.at(-1));
+  engine.canvas.fire('object:scaling', { target: object });
+  assert.equal(snaps.at(-1), null);
+});
+
+test('snap guides never become canvas objects, printed pixels, serialized properties or undo steps', async t => {
+  const { engine, snaps } = await createEngine(t);
+  const object = addSnapRectangle(engine);
+  const originalSurface = engine.serializeSurface();
+  const originalPrint = engine.getDocument().prints.front;
+  const originalObjects = [...engine.canvas.getObjects()];
+  moveArtwork(engine, object, { left: 450, top: 440 });
+  assert.ok(snaps.at(-1)?.guides.length);
+  assert.deepEqual(engine.canvas.getObjects(), originalObjects);
+  assert.equal(engine.serializeSurface(), originalSurface, 'guide state is not stored on Fabric objects');
+  assert.equal(engine.getDocument().prints.front, originalPrint, 'visible alignment feedback is excluded from print PNGs');
+  engine.canvas.fire('object:modified', { target: object });
+  engine.canvas.fire('mouse:up', { target: object });
+  assert.equal(engine.serializeSurface(), originalSurface);
+  engine.setSnap(false);
+  assert.equal(engine.serializeSurface(), originalSurface);
+  const restored = await createEngine(t, engine.getDocument());
+  assert.equal(restored.engine.snapFeedback, null, 'guide state is not part of portable saved documents');
+  assert.equal(restored.engine.canvas.getObjects().length, 1);
+  await engine.history('undo');
+  assert.equal(engine.canvas.getObjects().length, 1, 'one undo reaches the pre-size artwork edit, not a guide-only state');
+  await engine.history('undo');
+  assert.equal(engine.canvas.getObjects().length, 0, 'a second undo removes the one added layer without extra alignment states');
+});
 
 async function decodePng(src) {
   const image = await loadImage(src);

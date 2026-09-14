@@ -1,4 +1,4 @@
-import { createElement, lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { createElement, lazy, Suspense, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { ArrowDownToLine, Box, Camera, Check, ChevronDown, Download, FileUp, Grid2X2, Image as ImageIcon, Layers, LoaderCircle, Magnet, MousePointer2, PanelLeftClose, Plus, Redo2, Save, Shapes, Shirt, Sparkles, Type, Undo2, Upload, X } from 'lucide-react';
 import StudioCanvas from './StudioCanvas';
 import StudioTools from './StudioTools';
@@ -45,6 +45,7 @@ function readDraft(key, type) {
 }
 
 export default function UnifiedStudio({ designData, productType, onProductTypeChange, draftKey = 'playground', onSave, onSnapshot, onColorways, availableColors = NO_COLORS, saving = false }) {
+  const snapHelpId = useId();
   const [start] = useState(() => initialState(designData, productType));
   const [initialDocument, setInitialDocument] = useState(start.document);
   const [state, setState] = useState({ document: start.document, loading: true, layers: [], selected: null, canUndo: false, canRedo: false });
@@ -305,7 +306,8 @@ export default function UnifiedStudio({ designData, productType, onProductTypeCh
           {displayMode !== '2d' && <div className="us-stage us-3d-stage"><div className="us-stage-label"><span><Box size={12} /> LIVE PREVIEW</span><span className="us-live-dot">Synced</span></div><div className="us-viewer-wrap"><Suspense fallback={<div className="us-viewer-loading"><LoaderCircle size={22} className="us-spin" />Loading 3D preview…</div>}><ProductViewer ref={viewerRef} productType={type} color={color} prints={state.document.prints} view={view} autoRotate={autoRotate} /></Suspense></div><p className="us-stage-caption">Drag to rotate · pinch or scroll to zoom</p></div>}
           {(!!busy || state.loading) && <div className="us-busy" role="status"><LoaderCircle size={16} className="us-spin" />{busy || 'Preparing your design'}</div>}
         </div>
-        <div className="us-workspace-footer"><div><label><input type="checkbox" checked={guides} onChange={e => setGuides(e.target.checked)} /> Print guide</label><button type="button" aria-pressed={snap} className={snap ? 'is-active' : ''} onClick={() => setSnap(!snap)}><Magnet size={14} /> Snap {snap ? 'on' : 'off'}</button></div>{displayMode !== '2d' && <label><input type="checkbox" checked={autoRotate} onChange={e => setAutoRotate(e.target.checked)} /> Auto rotate</label>}</div>
+        <div className="us-workspace-footer"><div><label><input type="checkbox" checked={guides} onChange={e => setGuides(e.target.checked)} /> Print guide</label><button type="button" aria-label="Smart snap" aria-describedby={displayMode !== '3d' ? snapHelpId : undefined} aria-pressed={snap} className={snap ? 'is-active' : ''} onClick={() => setSnap(!snap)}><Magnet size={14} /> Smart snap {snap ? 'on' : 'off'}</button></div>{displayMode !== '2d' && <label><input type="checkbox" checked={autoRotate} onChange={e => setAutoRotate(e.target.checked)} /> Auto rotate</label>}</div>
+        {displayMode !== '3d' && <p className="us-snap-help" id={snapHelpId}>{snap ? <><span className="us-snap-sample" aria-hidden="true" />Red guides hold centers, edges & equal spacing. Pull away to release.<span className="us-desktop-only"> Hold Alt to move freely.</span></> : 'Smart snap is off. Move and rotate artwork freely.'}</p>}
         {!state.layers.length && !state.loading && <div className="us-start-hint"><span>Good things start with a blank canvas.</span><button type="button" onClick={() => { setTool('text'); setPanelOpen(true); }}><Plus size={14} /> Add text</button><button type="button" onClick={() => { setTool('assets'); setPanelOpen(true); }}>Explore artwork →</button></div>}
       </div>
     </div>

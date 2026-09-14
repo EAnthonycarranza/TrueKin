@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { LoaderCircle, RefreshCw } from 'lucide-react';
+import { LoaderCircle, LockKeyhole, RefreshCw } from 'lucide-react';
 import CanvasEngine from './canvasEngine';
 import { BOARD, surfaceInfo } from './studioDocument';
 import { renderMockup } from './mockups';
@@ -9,6 +9,7 @@ const StudioCanvas = forwardRef(function StudioCanvas({ initialDocument, view, c
   const callbacks = useRef({ onChange, onError });
   const [photoState, setPhotoState] = useState({ loading: true, error: false });
   const [retry, setRetry] = useState(0);
+  const [alignment, setAlignment] = useState(null);
   useEffect(() => { callbacks.current = { onChange, onError }; }, [onChange, onError]);
   useImperativeHandle(ref, () => ({ getEngine: () => engine.current }), []);
 
@@ -17,12 +18,14 @@ const StudioCanvas = forwardRef(function StudioCanvas({ initialDocument, view, c
     // race the next StrictMode mount on the same DOM node.
     const node = document.createElement('canvas');
     element.current.appendChild(node);
-    const e = new CanvasEngine(node, initialDocument, value => callbacks.current.onChange(value), error => callbacks.current.onError(error));
+    let mounted = true;
+    const e = new CanvasEngine(node, initialDocument, value => callbacks.current.onChange(value), error => callbacks.current.onError(error), value => { if (mounted) setAlignment(value); });
     engine.current = e;
     const resize = () => { if (host.current) e.resize(host.current.clientWidth); };
     const observer = new ResizeObserver(resize);
     observer.observe(host.current); resize();
     return () => {
+      mounted = false;
       observer.disconnect();
       e.dispose();
       engine.current = null;
@@ -38,7 +41,7 @@ const StudioCanvas = forwardRef(function StudioCanvas({ initialDocument, view, c
     e.ready.then(() => { if (!e.disposed && e.view !== view) e.loadView(view); });
   }, [view, initialDocument]);
 
-  useEffect(() => { if (engine.current) engine.current.snap = snap; }, [snap, initialDocument]);
+  useEffect(() => { engine.current?.setSnap(snap); }, [snap, initialDocument]);
   useEffect(() => { const e = engine.current; if (e && e.document.garmentColor !== color) e.setColor(color); }, [color, initialDocument]);
 
   useEffect(() => {
@@ -59,6 +62,23 @@ const StudioCanvas = forwardRef(function StudioCanvas({ initialDocument, view, c
     <canvas className="us-product-photo" ref={mockup} width={BOARD.width} height={BOARD.height} aria-hidden="true" />
     <div className="us-fabric-host" ref={element} />
     {guides && <div className="us-print-guide" style={{ left: `${area.x * 100}%`, top: `${area.y * 100}%`, width: `${area.w * 100}%`, height: `${area.h * 100}%` }}><span>PRINT AREA</span></div>}
+    {snap && alignment && <div className={`us-snap-overlay is-${alignment.phase}`}>
+      <svg className="us-snap-lines" viewBox={`0 0 ${BOARD.width} ${BOARD.height}`} aria-hidden="true">
+        {alignment.guides.map((guide, index) => {
+          const coordinates = guide.axis === 'x'
+            ? { x1: guide.at, x2: guide.at, y1: Math.max(0, guide.from - 16), y2: Math.min(BOARD.height, guide.to + 16) }
+            : { y1: guide.at, y2: guide.at, x1: Math.max(0, guide.from - 16), x2: Math.min(BOARD.width, guide.to + 16) };
+          return <g key={`${guide.axis}-${index}`}>
+            <line {...coordinates} className="us-snap-line-halo" vectorEffect="non-scaling-stroke" />
+            <line {...coordinates} className="us-snap-line" vectorEffect="non-scaling-stroke" />
+          </g>;
+        })}
+      </svg>
+      <div className="us-snap-status" role="status" aria-live="polite" aria-atomic="true">
+        <LockKeyhole size={13} aria-hidden="true" />
+        <span>{alignment.label}<small>{alignment.phase === 'settled' ? 'Aligned — use Lock layer to keep it here' : 'Snap held · pull away to release'}</small></span>
+      </div>
+    </div>}
     {photoState.loading && <div className="us-stage-progress" role="status"><LoaderCircle size={15} className="us-spin" /> Preparing product</div>}
     {photoState.error && <div className="us-photo-error" role="alert"><span>Product photo could not load.</span><button type="button" onClick={() => setRetry(r => r + 1)}><RefreshCw size={14} /> Retry</button></div>}
   </div>;

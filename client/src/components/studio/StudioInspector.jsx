@@ -53,9 +53,9 @@ export default function StudioInspector({ selected, onUpdate, onCommand }) {
     <section className="us-inspector" aria-label="Selected artwork properties">
       <div className="us-field-row">
         <strong>{text ? 'Text' : image ? 'Image' : selected.type === 'activeselection' ? 'Selected artwork' : 'Shape'} settings</strong>
-        <button type="button" className="us-button" aria-pressed={locked} onClick={() => onCommand('lock')}>
+        <button type="button" className="us-button" aria-pressed={locked} title={locked ? 'Unlock this layer to move, resize, or edit it' : 'Keep this layer in place after aligning it'} onClick={() => onCommand('lock')}>
           {locked ? <UnlockKeyhole size={15} aria-hidden="true" /> : <LockKeyhole size={15} aria-hidden="true" />}
-          {locked ? 'Unlock' : 'Lock'}
+          {locked ? 'Unlock layer' : 'Lock layer'}
         </button>
       </div>
 
