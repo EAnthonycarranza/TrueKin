@@ -19,7 +19,7 @@ class PreviewBoundary extends Component {
       <div style={overlayStyle} role="alert">
         <Box size={28} aria-hidden="true" />
         <strong style={{ color: '#292922' }}>3D preview is unavailable</strong>
-        <span>Your design is safe. You can keep editing in 2D.</span>
+        <span>{this.props.customerView ? 'You can still browse the product photos.' : 'Your design is safe. You can keep editing in 2D.'}</span>
         <button type="button" className="btn btn-secondary btn-sm" onClick={this.props.onRetry}><RotateCcw size={16} /> Try again</button>
       </div>
     );
@@ -193,7 +193,7 @@ const RenderBridge = forwardRef(function RenderBridge({ onReady, onContextLost }
   return null;
 });
 
-const ProductViewer = forwardRef(function ProductViewer({ productType = 'tshirt', color = '#f4f1ea', prints = {}, view = 'front', autoRotate = false, interactive = true, onReady, className = '', style }, ref) {
+const ProductViewer = forwardRef(function ProductViewer({ productType = 'tshirt', color = '#f4f1ea', prints = {}, view = 'front', autoRotate = false, interactive = true, onReady, customerView = false, className = '', style }, ref) {
   const bridgeRef = useRef(null);
   const controlsRef = useRef(null);
   const readyCallback = useRef(onReady);
@@ -212,9 +212,9 @@ const ProductViewer = forwardRef(function ProductViewer({ productType = 'tshirt'
     <div className={`tk-product-viewer ${className}`} style={{ position: 'relative', width: '100%', height: '100%', minHeight: 220, overflow: 'hidden', ...style }} aria-label={`Interactive 3D ${productType === 'hat' ? 'hat' : 'T-shirt'} preview`}>
       {readyScene !== sceneKey && <div style={{ ...overlayStyle, pointerEvents: 'none' }} role="status"><Box size={24} aria-hidden="true" /><span>Preparing your 3D preview…</span></div>}
       {lostScene === sceneKey ? (
-        <div style={overlayStyle} role="alert"><strong>3D preview paused</strong><span>Your artwork is still saved in the editor.</span><button type="button" className="btn btn-secondary btn-sm" onClick={retry}><RotateCcw size={16} /> Reload preview</button></div>
+        <div style={overlayStyle} role="alert"><strong>3D preview paused</strong><span>{customerView ? 'Reload the preview or return to the product photos.' : 'Your artwork is still saved in the editor.'}</span><button type="button" className="btn btn-secondary btn-sm" onClick={retry}><RotateCcw size={16} /> Reload preview</button></div>
       ) : (
-        <PreviewBoundary key={sceneKey} onRetry={retry} onFailure={handleFailure}>
+        <PreviewBoundary key={sceneKey} onRetry={retry} onFailure={handleFailure} customerView={customerView}>
           <Canvas key={sceneKey} dpr={[1, 1.75]} camera={{ position: [0, 0.25, 3.65], fov: 32, near: 0.05, far: 30 }} gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' }} onCreated={({ gl }) => { gl.outputColorSpace = THREE.SRGBColorSpace; gl.toneMapping = THREE.NoToneMapping; gl.setClearColor(0, 0); }} style={{ width: '100%', height: '100%', touchAction: interactive ? 'none' : 'auto' }}>
             <Suspense fallback={null}>
               <ambientLight intensity={0.85} />

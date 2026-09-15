@@ -2,6 +2,7 @@ import * as fabric from 'fabric';
 import { BOARD, SURFACES, printRect, makeHistory, serializableDocument } from './studioDocument';
 import { loadFabricAssetImage, loadFabricImageFromFile } from '../designer/designerHelpers';
 import { createSnapSession, resetSnapSession, solveMoveSnap, solveAngleSnap } from './smartSnapping';
+import { QUICK_POSITIONS, getQuickPosition, positionOffset, safePrintRect } from './quickPositioning';
 
 const PROPS = ['studioId', 'studioName', 'studioLocked', 'assetTone', 'assetAltSrc', 'inkLocked'];
 const uid = () => crypto.randomUUID();
@@ -169,6 +170,43 @@ export default class CanvasEngine {
     this.finishSnapping();
   }
 
+  positionArtwork(position) {
+    clearTimeout(this.previewTimer);
+    clearTimeout(this.textTimer);
+    const object = this.selected;
+    const safe = safePrintRect(this.rect);
+    object.setCoords();
+    const box = object.getBoundingRect();
+    if (box.width > safe.width || box.height > safe.height) {
+      const original = { x: object.scaleX, y: object.scaleY };
+      // Measure the rendered bounds at each scale: rotated objects and uniform
+      // strokes need not shrink in direct proportion to their bounding box.
+      let low = 0, high = 1;
+      for (let i = 0; i < 28; i++) {
+        const factor = (low + high) / 2;
+        object.set({ scaleX: original.x * factor, scaleY: original.y * factor });
+        object.setCoords();
+        const bounds = object.getBoundingRect();
+        if (bounds.width <= safe.width && bounds.height <= safe.height) low = factor;
+        else high = factor;
+      }
+      object.set({ scaleX: original.x * low, scaleY: original.y * low });
+      object.setCoords();
+    }
+    const offset = positionOffset(object.getBoundingRect(), this.rect, position);
+    object.set({ left: object.left + offset.x, top: object.top + offset.y });
+  }
+
+  showQuickPosition(position) {
+    const r = this.rect, safe = safePrintRect(r);
+    const label = `Placed ${position.label.toLowerCase()}`;
+    this.publishSnap({ label, lockedAxes: ['x', 'y'], phase: 'settled', guides: [
+      { axis: 'x', at: safe.left + safe.width * position.x, from: r.top, to: r.top + r.height, kind: position.x === .5 ? 'center' : 'edge', label },
+      { axis: 'y', at: safe.top + safe.height * position.y, from: r.left, to: r.left + r.width, kind: position.y === .5 ? 'center' : 'edge', label },
+    ] });
+    this.finishSnapping();
+  }
+
   async initialize() {
     try {
       // Materialize every saved surface once, so a back print is present in 3D
@@ -270,6 +308,7 @@ export default class CanvasEngine {
         fill: typeof o.fill === 'string' ? o.fill : '#181818', opacity: Math.round((o.opacity ?? 1) * 100),
         angle: Math.round(o.angle || 0), bold: o.fontWeight === 'bold', italic: o.fontStyle === 'italic',
         locked: !!o.studioLocked, width: Math.round((box?.width || 0) / rect.width * 100),
+        quickPosition: getQuickPosition(box, rect),
         outside: box && (box.left < rect.left - 1 || box.top < rect.top - 1 || box.left + box.width > rect.left + rect.width + 1 || box.top + box.height > rect.top + rect.height + 1),
       } : null,
     });
@@ -341,6 +380,8 @@ export default class CanvasEngine {
 
   command(action, value) {
     if (this.loading || this.disposed || this.failed) return;
+    const position = action === 'position' ? QUICK_POSITIONS.find(item => item.id === value) : null;
+    if (action === 'position' && !position) return;
     this.clearSnapping();
     const c = this.canvas, o = this.selected;
     if (action === 'select') { const item = c.getObjects().find(x => x.studioId === value); if (item) c.setActiveObject(item); c.requestRenderAll(); this.notify(); return; }
@@ -348,6 +389,7 @@ export default class CanvasEngine {
     if (action === 'selectAll') { c.setActiveObject(new fabric.ActiveSelection(c.getObjects().filter(x => !x.studioLocked), { canvas: c })); c.requestRenderAll(); return; }
     if (action === 'clear') { c.discardActiveObject(); c.remove(...c.getObjects()); this.commit(); return; }
     if (!o) return;
+    if (action === 'position' && (o.studioLocked || (o.type === 'activeselection' && o.getObjects().some(item => item.studioLocked)))) return;
     if (o.type === 'activeselection' && ['lock', 'visibility', 'duplicate', 'forward', 'backward'].includes(action)) {
       const members = c.getObjects().filter(item => o.getObjects().includes(item));
       if (action === 'duplicate') {
@@ -393,6 +435,7 @@ export default class CanvasEngine {
     else if (action === 'backward') c.sendObjectBackwards(o);
     else if (action === 'flip') o.set({ flipX: !o.flipX });
     else if (action === 'nudge') o.set({ left: o.left + value[0], top: o.top + value[1] });
+    else if (action === 'position') this.positionArtwork(position);
     else if (action === 'size') {
       const r = this.rect, box = o.getBoundingRect();
       const factor = Math.min(r.width * value / box.width, r.height * value / box.height);
@@ -406,6 +449,7 @@ export default class CanvasEngine {
     }
     o.setCoords(); c.requestRenderAll(); this.commit();
     if (action === 'align') this.showAlignment(value);
+    if (action === 'position') this.showQuickPosition(position);
   }
 
   async history(direction) {

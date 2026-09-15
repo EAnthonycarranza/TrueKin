@@ -1,10 +1,11 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ShoppingBag, Check, Star, Trash2, ShieldCheck, User as UserIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../api/client';
 import { useCartStore } from '../store/cartStore';
 import { useAuthStore } from '../store/authStore';
+import ProductGallery from '../components/product/ProductGallery';
 
 const COLOR_NAMES = {
   '#FFFFFF': 'White', '#000000': 'Black', '#929292': 'Gray',
@@ -13,16 +14,10 @@ const COLOR_NAMES = {
   '#1fd3ca': 'Teal', '#FFC0CB': 'Pink', '#8B4513': 'Brown',
 };
 
-const Shirt3DPreview = lazy(() => import('../components/shirt3d/Shirt3DPreview'));
-const Tshirt2DPreview = lazy(() => import('../components/designer/Tshirt2DPreview'));
-const UnifiedPreview = lazy(() => import('../components/studio/UnifiedPreview'));
-
 export default function ProductDetail() {
   const { id } = useParams();
   const [product, setProduct] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [selectedImage, setSelectedImage] = useState(0);
-  const [showDesignPreview, setShowDesignPreview] = useState(true);
+  const [loadedId, setLoadedId] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [selectedColor, setSelectedColor] = useState(null);
   const [selectedSize, setSelectedSize] = useState(null);
@@ -38,24 +33,21 @@ export default function ProductDetail() {
   const [reviewSending, setReviewSending] = useState(false);
 
   useEffect(() => {
+    let active = true;
     api.getProduct(id)
       .then((d) => {
+        if (!active) return;
         setProduct(d.product);
-        setShowDesignPreview(!!d.product.designData);
-        if (d.product.availableColors?.length > 0) {
-          setSelectedColor(d.product.availableColors[0]);
-        }
-        if (d.product.sizes?.length > 0) {
-          setSelectedSize(d.product.sizes[0].size);
-        }
+        setSelectedColor(d.product.availableColors?.[0] || null);
+        setSelectedSize(d.product.sizes?.[0]?.size || null);
+        setQuantity(1);
       })
-      .catch(() => toast.error('Product not found'))
-      .finally(() => setLoading(false));
+      .catch(() => { if (active) { setProduct(null); toast.error('Product not found'); } })
+      .finally(() => { if (active) setLoadedId(id); });
+    return () => { active = false; };
   }, [id]);
 
-  const loadReviews = async () => {
-    try {
-      const d = await api.getReviews(id);
+  const applyReviews = useCallback((d) => {
       setReviews(d.reviews || []);
       setReviewSummary(d.summary || { count: 0, average: 0, distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } });
       // If the current user already has a review, prefill the form for edit.
@@ -65,13 +57,17 @@ export default function ProductDetail() {
           setReviewForm({ rating: mine.rating, title: mine.title || '', comment: mine.comment || '' });
         }
       }
-    } catch { /* silent */ }
+  }, [authUser]);
+
+  const loadReviews = async () => {
+    try { applyReviews(await api.getReviews(id)); } catch { /* silent */ }
   };
 
   useEffect(() => {
-    loadReviews();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, authUser?._id]);
+    let active = true;
+    api.getReviews(id).then(data => { if (active) applyReviews(data); }).catch(() => {});
+    return () => { active = false; };
+  }, [id, applyReviews]);
 
   const myReview = authUser
     ? reviews.find((r) => r.user === authUser._id || r.user?._id === authUser._id)
@@ -120,49 +116,17 @@ export default function ProductDetail() {
     }
   };
 
-  if (loading) return <div className="loading-page"><div className="spinner" /></div>;
+  if (loadedId !== id) return <div className="loading-page"><div className="spinner" /></div>;
   if (!product) return <div className="page container"><p>Product not found.</p></div>;
 
-  const hasDesign = !!product.designData;
-  const hasImages = product.imageUrls.length > 0;
-  const is2D = product.editorType === '2d';
   const parsedDesign = (() => {
     try { return typeof product.designData === 'string' ? JSON.parse(product.designData) : product.designData; }
     catch { return null; }
   })();
-  const isUnified = parsedDesign?.studio === 'truekin-unified';
   const isHat = (product.productType || parsedDesign?.productType) === 'hat';
 
   const hasColors = product?.availableColors?.length > 0;
   const hasSizes = product?.sizes?.length > 0;
-
-  /**
-   * Front and back shots for the colour the viewer picked.
-   *
-   * The admin shoots one pair per stocked colour, so the gallery follows the
-   * swatch instead of showing one fixed set that contradicts it. Keys are
-   * stored uppercase; the swatch hex may be either case.
-   */
-  const colorShots = (() => {
-    if (!selectedColor || !product?.colorImages) return [];
-    const entry = product.colorImages[selectedColor.toUpperCase()]
-      || product.colorImages[selectedColor];
-    if (!entry) return [];
-    return [
-      entry.front && { url: entry.front, label: 'Front' },
-      entry.back && { url: entry.back, label: 'Back' },
-    ].filter(Boolean);
-  })();
-  const hasColorShots = colorShots.length > 0;
-
-  /**
-   * What the gallery shows. A colour with its own shots replaces the generic
-   * set entirely — showing both would put a black tee next to a blue one under
-   * a swatch that says blue.
-   */
-  const galleryImages = hasColorShots
-    ? colorShots
-    : product.imageUrls.map((url) => ({ url, label: '' }));
 
   const handleAddToCart = () => {
     if (hasColors && !selectedColor) {
@@ -188,93 +152,13 @@ export default function ProductDetail() {
     openCart();
   };
 
-  // Determine the preview label based on editor type
-  const previewLabel = isUnified ? 'Live Preview' : is2D ? '2D View' : '3D View';
-
   return (
     <div className="page product-detail-page">
       <div className="container product-detail-container">
         <div className="product-detail-layout" style={styles.layout}>
-          {/* Images / Design Preview */}
+          {/* Photo-first gallery; interactive 3D opens only on request. */}
           <div className="product-detail-media" style={styles.images}>
-            {/* Main view: 3D/2D design preview or static image */}
-            {showDesignPreview && hasDesign ? (
-              <Suspense fallback={
-                <div className="product-detail-main-image" style={{ ...styles.mainImage, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <div className="spinner" />
-                </div>
-              }>
-                {isUnified ? (
-                  <UnifiedPreview
-                    designData={product.designData}
-                    colorOverride={selectedColor}
-                    height={500}
-                    style={{ width: '100%', borderRadius: 12, overflow: 'hidden' }}
-                  />
-                ) : is2D ? (
-                  <Tshirt2DPreview
-                    designData={product.designData}
-                    colorOverride={selectedColor}
-                    style={{ minHeight: 400 }}
-                  />
-                ) : (
-                  <Shirt3DPreview
-                    designData={product.designData}
-                    colorOverride={selectedColor}
-                    style={{ minHeight: 400 }}
-                  />
-                )}
-              </Suspense>
-            ) : (
-              <div className="product-detail-main-image" style={styles.mainImage}>
-                {galleryImages[selectedImage] ? (
-                  <img
-                    src={galleryImages[selectedImage].url}
-                    alt={`${product.title}${galleryImages[selectedImage].label ? ` — ${galleryImages[selectedImage].label}` : ''}`}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 12 }}
-                  />
-                ) : (
-                  <div className="img-placeholder" style={{ height: 500, borderRadius: 12, fontSize: 24 }}>
-                    {product.title.charAt(0)}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Thumbnail strip: design preview toggle + image thumbs */}
-            {(hasDesign || hasImages) && (
-              <div className="product-detail-thumbs" style={styles.thumbs}>
-                {hasDesign && (
-                  <button
-                    onClick={() => setShowDesignPreview(true)}
-                    style={{
-                      ...styles.thumbBtn,
-                      border: showDesignPreview ? '2px solid var(--accent)' : '2px solid var(--border)',
-                      background: showDesignPreview ? 'var(--accent)' : '#f9fafb',
-                      color: showDesignPreview ? '#fff' : '#666',
-                    }}
-                  >
-                    {previewLabel}
-                  </button>
-                )}
-                {galleryImages.map((shot, i) => (
-                  <img
-                    key={`${shot.url}-${i}`}
-                    src={shot.url}
-                    alt={shot.label || ''}
-                    title={shot.label || ''}
-                    onClick={() => {
-                      setSelectedImage(i);
-                      setShowDesignPreview(false);
-                    }}
-                    style={{
-                      ...styles.thumb,
-                      border: !showDesignPreview && i === selectedImage ? '2px solid var(--accent)' : '2px solid transparent',
-                    }}
-                  />
-                ))}
-              </div>
-            )}
+            <ProductGallery key={product._id} product={product} color={selectedColor} onColorChange={setSelectedColor} />
           </div>
 
           {/* Info */}
@@ -296,12 +180,9 @@ export default function ProductDetail() {
                       <button
                         key={hex}
                         type="button"
-                        onClick={() => {
-                          setSelectedColor(hex);
-                          // Index 1 of black's shots is not index 1 of blue's,
-                          // so drop back to this colour's front view.
-                          setSelectedImage(0);
-                        }}
+                        onClick={() => setSelectedColor(hex)}
+                        aria-label={`Select ${COLOR_NAMES[hex] || hex}`}
+                        aria-pressed={isActive}
                         title={COLOR_NAMES[hex] || hex}
                         style={{
                           width: 36,
@@ -995,20 +876,6 @@ function Stars({ value, size = 14 }) {
 const styles = {
   layout: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48, alignItems: 'start' },
   images: {},
-  mainImage: { aspectRatio: '1', borderRadius: 12, overflow: 'hidden', background: '#f9fafb' },
-  thumbs: { display: 'flex', gap: 8, marginTop: 12, alignItems: 'center' },
-  thumb: { width: 72, height: 72, objectFit: 'cover', borderRadius: 8, cursor: 'pointer' },
-  thumbBtn: {
-    width: 72,
-    height: 72,
-    borderRadius: 8,
-    cursor: 'pointer',
-    fontWeight: 600,
-    fontSize: 13,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   info: {},
   title: { fontSize: 28, fontWeight: 700, marginBottom: 8 },
   price: { fontSize: 24, fontWeight: 700, marginBottom: 16 },
