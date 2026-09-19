@@ -1,7 +1,8 @@
 const Order = require('../models/Order');
 const User = require('../models/User');
+const PickupLocation = require('../models/PickupLocation');
 const mongoose = require('mongoose');
-const { readText, validateOrderStatus, inputError } = require('../utils/fulfillment');
+const { readText, validateOrderStatus, inputError, snapshotLocation } = require('../utils/fulfillment');
 const { toCsv, parseCsv } = require('../utils/csv');
 const { sendPickupReadyNotification } = require('../utils/email');
 
@@ -13,8 +14,9 @@ const { sendPickupReadyNotification } = require('../utils/email');
 // leak order details across customers.
 exports.trackOrders = async (req, res) => {
   try {
-    const email = (req.query.email || '').trim().toLowerCase();
-    const orderId = (req.query.orderId || '').trim();
+    const email = readText(req.query.email, 'Email', 254, true).toLowerCase();
+    const orderId = readText(req.query.orderId, 'Order number', 24);
+    if (orderId && !mongoose.isValidObjectId(orderId)) throw inputError('Enter a valid order number');
 
     if (!email) {
       return res.status(400).json({ message: 'Email is required' });
@@ -27,7 +29,7 @@ exports.trackOrders = async (req, res) => {
 
     const baseMatch = {
       $or: [
-        { guestEmail: new RegExp(`^${email}$`, 'i') },
+        { guestEmail: new RegExp(`^${email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
         userIds.length ? { user: { $in: userIds } } : { _id: null },
       ],
     };
@@ -76,7 +78,7 @@ exports.trackOrders = async (req, res) => {
     res.json({ orders });
   } catch (error) {
     console.error('Track orders error:', error);
-    res.status(500).json({ message: error.message });
+    res.status(error.status || 500).json({ message: error.message });
   }
 };
 
@@ -145,6 +147,10 @@ exports.updateOrderStatus = async (req, res) => {
     // re-saving an order that is already ready must not send it again.
     const announcePickup = status === 'ready_for_pickup' && order.status !== 'ready_for_pickup';
     order.status = status;
+    if (status === 'paid' && order.paymentStatus !== 'paid') {
+      order.paymentStatus = 'paid';
+      order.paidAt = new Date();
+    }
     if (status === 'ready_for_pickup' && !order.pickup.readyAt) order.pickup.readyAt = new Date();
     if (status === 'picked_up' && !order.pickup.pickedUpAt) order.pickup.pickedUpAt = new Date();
     if (status === 'picked_up' && order.paymentMethod === 'pay_on_pickup' && order.paymentStatus !== 'paid') {
@@ -166,12 +172,20 @@ exports.updateOrderStatus = async (req, res) => {
 exports.updatePickupInstructions = async (req, res) => {
   try {
     const orderInstructions = readText(req.body.orderInstructions, 'Pickup instructions', 2000);
+    const updates = { 'pickup.orderInstructions': orderInstructions };
+    if (req.body.locationId) {
+      if (!mongoose.isValidObjectId(req.body.locationId)) throw inputError('Choose a valid pickup location');
+      const location = await PickupLocation.findOne({ _id: req.body.locationId, active: true });
+      if (!location) throw inputError('This pickup location is no longer available');
+      updates['pickup.locationId'] = location._id;
+      for (const [field, value] of Object.entries(snapshotLocation(location))) updates[`pickup.${field}`] = value;
+    }
     const order = await Order.findOneAndUpdate(
-      { _id: req.params.id, fulfillmentMethod: 'pickup' },
-      { $set: { 'pickup.orderInstructions': orderInstructions } },
+      { _id: req.params.id, fulfillmentMethod: 'pickup', ...(req.body.locationId ? { status: { $nin: ['picked_up', 'cancelled'] } } : {}) },
+      { $set: updates },
       { new: true, runValidators: true }
     ).populate('user', 'name email');
-    if (!order) return res.status(404).json({ message: 'Pickup order not found' });
+    if (!order) return res.status(404).json({ message: 'Pickup order not found or its location can no longer be changed' });
     res.json({ order });
   } catch (error) {
     res.status(error.status || 500).json({ message: error.message });
@@ -350,7 +364,8 @@ exports.exportOrders = async (req, res) => {
   try {
     const filter = {};
     if (req.query.status) filter.status = req.query.status;
-    if (req.query.fulfillmentMethod) filter.fulfillmentMethod = req.query.fulfillmentMethod;
+    if (req.query.fulfillmentMethod === 'pickup') filter.fulfillmentMethod = 'pickup';
+    if (req.query.fulfillmentMethod === 'shipping') filter.fulfillmentMethod = { $ne: 'pickup' };
 
     const orders = await Order.find(filter).sort({ createdAt: -1 }).populate('user', 'name email');
     const csv = toCsv(orders.map(orderToRow), CSV_COLUMNS);

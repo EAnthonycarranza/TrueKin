@@ -58,7 +58,7 @@ export const api = {
   getPickupLocations: () => request('/pickup/locations'),
   adminGetPickupLocations: () => request('/pickup/admin/locations'),
   adminSavePickupLocation: (id, body) => request(`/pickup/admin/locations${id ? '/' + id : ''}`, { method: id ? 'PUT' : 'POST', body }),
-  adminUpdatePickupInstructions: (id, orderInstructions) => request(`/orders/admin/${id}/pickup`, { method: 'PUT', body: { orderInstructions } }),
+  adminUpdatePickupInstructions: (id, orderInstructions, locationId = '') => request(`/orders/admin/${id}/pickup`, { method: 'PUT', body: { orderInstructions, locationId } }),
 
   // Shipping
   getShippingRates: (body) => request('/shipping/rates', { method: 'POST', body }),
@@ -99,7 +99,7 @@ export const api = {
   adminImportOrders: (csv) => request('/orders/admin/import', { method: 'POST', body: { csv } }),
   // Export is a plain link, not a fetch — the browser handles the download and
   // the auth cookie rides along, so there is nothing to wire up here.
-  adminExportOrdersUrl: (status) => `/api/orders/admin/export${status ? `?status=${encodeURIComponent(status)}` : ''}`,
+  adminExportOrdersUrl: (status = '', fulfillmentMethod = '') => `/api/orders/admin/export?${new URLSearchParams({ status, fulfillmentMethod })}`,
 
   adminCreateLabel: (body) => request('/shipping/label', { method: 'POST', body }),
   adminGetOrderRates: (orderId) => request(`/shipping/order/${orderId}/rates`),

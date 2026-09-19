@@ -18,6 +18,7 @@ import toast from 'react-hot-toast';
 import { statusLabel, pickupPaymentDue } from '../../utils/fulfillment';
 import { api } from '../../api/client';
 import AdminLayout from '../../components/AdminLayout';
+import { PickupLocationDetails, PickupCoordinator } from '../../components/PickupDetails';
 
 const statusBadge = {
   pending: 'badge-warning',
@@ -55,13 +56,20 @@ export default function AdminOrderDetail() {
     length: 10, width: 8, height: 2, weight: 8,
     distanceUnit: 'in', massUnit: 'oz',
   });
-  const [tracking, setTracking] = useState(null);
+  const [statusSaving, setStatusSaving] = useState(false);
+  const [paymentReceived, setPaymentReceived] = useState(false);
+  const [pickupInstructions, setPickupInstructions] = useState('');
+  const [pickupSaving, setPickupSaving] = useState(false);
+  const [locations, setLocations] = useState([]);
+  const [locationsError, setLocationsError] = useState('');
+  const [locationId, setLocationId] = useState('');
 
   useEffect(() => {
     api.adminGetOrder(id)
       .then((d) => {
         setOrder(d.order);
         setStatusUpdate(d.order.status);
+        setPickupInstructions(d.order.pickup?.orderInstructions || '');
         if (d.order.parcel) {
           setParcel({
             length: d.order.parcel.length || 10,
@@ -78,13 +86,38 @@ export default function AdminOrderDetail() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  const updateStatus = async () => {
+  useEffect(() => {
+    let ignore = false;
+    api.getPickupLocations().then((data) => { if (!ignore) setLocations(data.locations); })
+      .catch(() => { if (!ignore) setLocationsError('Locations could not be loaded. Refresh to assign a location.'); });
+    return () => { ignore = true; };
+  }, []);
+
+  const savePickup = async (event) => {
+    event.preventDefault();
+    setPickupSaving(true);
     try {
-      const { order: updated } = await api.adminUpdateOrderStatus(id, statusUpdate);
+      const { order: updated } = await api.adminUpdatePickupInstructions(id, pickupInstructions, locationId);
       setOrder(updated);
+      setPickupInstructions(updated.pickup.orderInstructions || '');
+      setLocationId('');
+      toast.success('Pickup details saved');
+    } catch (err) { toast.error(err.message); }
+    finally { setPickupSaving(false); }
+  };
+
+  const updateStatus = async () => {
+    setStatusSaving(true);
+    try {
+      const { order: updated } = await api.adminUpdateOrderStatus(id, statusUpdate, paymentReceived);
+      setOrder(updated);
+      setStatusUpdate(updated.status);
+      setPaymentReceived(false);
       toast.success('Status updated');
     } catch (err) {
       toast.error(err.message);
+    } finally {
+      setStatusSaving(false);
     }
   };
 
@@ -123,7 +156,6 @@ export default function AdminOrderDetail() {
     setTrackingLoading(true);
     try {
       const t = await api.adminGetTracking(id);
-      setTracking(t);
       // Also refresh the order to pick up synced history
       const { order: updated } = await api.adminGetOrder(id);
       setOrder(updated);
@@ -167,6 +199,9 @@ export default function AdminOrderDetail() {
   }
 
   const hasLabel = !!order.shippoTransactionId;
+  const isPickup = order.fulfillmentMethod === 'pickup';
+  const paymentDue = pickupPaymentDue(order);
+  const pickupDirty = !!locationId || pickupInstructions !== (order.pickup?.orderInstructions || '');
   const history = order.trackingHistory || [];
 
   return (
@@ -186,6 +221,8 @@ export default function AdminOrderDetail() {
             </p>
           </div>
           <div className="admin-order-detail-badges" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <span className="badge badge-gray">{isPickup ? 'Local pickup' : 'Shipping'}</span>
+            {paymentDue && <span className="badge badge-warning">Payment due at pickup</span>}
             <span className={`badge ${statusBadge[order.status] || 'badge-gray'}`} style={{ fontSize: 13, padding: '6px 14px' }}>
               {statusLabel(order.status)}
             </span>
@@ -236,7 +273,7 @@ export default function AdminOrderDetail() {
             </div>
 
             {/* Tracking History */}
-            {hasLabel && (
+            {!isPickup && hasLabel && (
               <div className="card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
                   <h3 style={{ ...styles.sectionTitle, marginBottom: 0 }}>
@@ -295,7 +332,7 @@ export default function AdminOrderDetail() {
             {/* Customer */}
             <div className="card" style={{ marginBottom: 16 }}>
               <h3 style={styles.sectionTitle}><CreditCard size={16} /> Customer</h3>
-              <p style={{ fontSize: 14 }}><strong>{order.user?.name || 'Guest'}</strong></p>
+              <p style={{ fontSize: 14 }}><strong>{order.pickup?.contactName || order.user?.name || order.shippingAddress?.name || 'Guest'}</strong></p>
               <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                 {order.user?.email || order.guestEmail}
               </p>
@@ -311,35 +348,59 @@ export default function AdminOrderDetail() {
               )}
             </div>
 
-            {/* Shipping Address */}
-            <div className="card" style={{ marginBottom: 16 }}>
+            {isPickup && <section className="card" style={{ marginBottom: 16 }}>
+              <h3 style={styles.sectionTitle}><MapPin size={16} /> Pickup handoff</h3>
+              <h4 style={{ marginBottom: 12 }}>{order.pickup?.name || 'Location to be coordinated'}</h4>
+              <PickupLocationDetails location={order.pickup} />
+              <PickupCoordinator location={order.pickup} />
+              <div className="pickup-instructions"><strong>Customer’s pickup notes</strong><p className="pickup-text">{order.pickup?.customerInstructions || 'No notes provided.'}</p></div>
+              <form className="pickup-order-editor" onSubmit={savePickup}>
+                <fieldset className="pickup-fieldset" disabled={pickupSaving || statusSaving}>
+                  {!['picked_up', 'cancelled'].includes(order.status) && <div className="form-group">
+                    <label htmlFor="order-pickup-location">Assign pickup location</label>
+                    <select id="order-pickup-location" className="input" value={locationId} onChange={(event) => setLocationId(event.target.value)}>
+                      <option value="">{order.pickup?.name ? `Keep saved location: ${order.pickup.name}` : 'Coordinate a location — not assigned yet'}</option>
+                      {locations.map((location) => <option value={location._id} key={location._id}>{location.name} — {location.city}</option>)}
+                    </select>
+                    {locationsError && <p role="alert" className="pickup-help">{locationsError}</p>}
+                  </div>}
+                  <div className="form-group"><label htmlFor="order-pickup-instructions">Instructions for this order</label><textarea id="order-pickup-instructions" className="input" rows={4} maxLength={2000} value={pickupInstructions} onChange={(event) => setPickupInstructions(event.target.value)} placeholder="Confirmed pickup time, meeting point, or instructions for arrival." /><p className="pickup-help">Visible to the customer in order tracking and the ready-for-pickup email. Save before updating status.</p></div>
+                  <button type="submit" className="btn btn-primary" disabled={!pickupDirty}>{pickupSaving ? 'Saving…' : 'Save pickup details'}</button>
+                </fieldset>
+              </form>
+            </section>}
+
+            {!isPickup && <div className="card" style={{ marginBottom: 16 }}>
               <h3 style={styles.sectionTitle}><MapPin size={16} /> Shipping Address</h3>
               <p style={{ fontSize: 14, lineHeight: 1.6 }}>
-                {order.shippingAddress.name}<br />
-                {order.shippingAddress.street}<br />
-                {order.shippingAddress.city}, {order.shippingAddress.state} {order.shippingAddress.zip}<br />
-                {order.shippingAddress.country}
+                {order.shippingAddress?.name}<br />
+                {order.shippingAddress?.street}<br />
+                {order.shippingAddress?.city}, {order.shippingAddress?.state} {order.shippingAddress?.zip}<br />
+                {order.shippingAddress?.country}
               </p>
-            </div>
+            </div>}
 
             {/* Update Status */}
             <div className="card" style={{ marginBottom: 16 }}>
               <h3 style={styles.sectionTitle}>Update Status</h3>
+              {isPickup && <p className="pickup-status-note">{order.status === 'cancelled' ? 'This order is cancelled.' : paymentDue ? <><strong>${(order.totalAmount / 100).toFixed(2)} due at pickup.</strong> Collect payment before completing the handoff.</> : order.paymentStatus === 'paid' || order.status === 'paid' ? 'Payment received.' : 'Online payment is pending.'}</p>}
               <div className="admin-status-update" style={{ display: 'flex', gap: 8 }}>
-                <select className="input" value={statusUpdate} onChange={(e) => setStatusUpdate(e.target.value)}>
+                <select aria-label="Order status" className="input" disabled={statusSaving || pickupSaving} value={statusUpdate} onChange={(e) => { setStatusUpdate(e.target.value); setPaymentReceived(false); }}>
                   <option value="pending">Pending</option>
-                  <option value="paid">Paid</option>
+                  {!paymentDue && <option value="paid">Paid</option>}
                   <option value="processing">Processing</option>
-                  <option value="shipped">Shipped</option>
-                  <option value="delivered">Delivered</option>
+                  {isPickup ? <><option value="ready_for_pickup">Ready for pickup</option><option value="picked_up">Picked up</option></> : <><option value="shipped">Shipped</option><option value="delivered">Delivered</option></>}
                   <option value="cancelled">Cancelled</option>
                 </select>
-                <button className="btn btn-primary" onClick={updateStatus}>Update</button>
+                <button className="btn btn-primary" disabled={statusSaving || pickupSaving || pickupDirty || statusUpdate === order.status || (statusUpdate === 'picked_up' && paymentDue && !paymentReceived)} onClick={updateStatus}>{statusSaving ? 'Updating…' : 'Update'}</button>
               </div>
+              {statusUpdate === 'picked_up' && paymentDue && <label className="pickup-active-toggle" style={{ marginTop: 14 }}><input type="checkbox" disabled={statusSaving} checked={paymentReceived} onChange={(event) => setPaymentReceived(event.target.checked)} /><span><strong>I collected ${(order.totalAmount / 100).toFixed(2)} in payment</strong><small>Completing pickup records this balance as paid.</small></span></label>}
+              {pickupDirty && <p className="pickup-help">Save pickup details before changing the status.</p>}
+              {order.pickup?.pickedUpAt && <p className="pickup-help">Picked up {new Date(order.pickup.pickedUpAt).toLocaleString()}</p>}
             </div>
 
             {/* Shipping / Shippo */}
-            <div className="card">
+            {!isPickup && <div className="card">
               <h3 style={styles.sectionTitle}><Truck size={16} /> Shipping</h3>
 
               {hasLabel ? (
@@ -478,7 +539,7 @@ export default function AdminOrderDetail() {
                   )}
                 </div>
               )}
-            </div>
+            </div>}
           </div>
         </div>
       </div>

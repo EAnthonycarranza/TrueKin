@@ -1,4 +1,8 @@
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+let stripe;
+const getStripe = () => {
+  if (!process.env.STRIPE_SECRET_KEY) throw Object.assign(new Error('Online payment is unavailable. Please choose pay at pickup.'), { status: 503 });
+  return stripe || (stripe = require('stripe')(process.env.STRIPE_SECRET_KEY));
+};
 const Order = require('../models/Order');
 const Product = require('../models/Product');
 const PickupLocation = require('../models/PickupLocation');
@@ -43,6 +47,8 @@ exports.createCheckoutSession = async (req, res) => {
       }
     }
     const shippingRate = fulfillmentMethod === 'shipping' ? req.body.shippingRate : undefined;
+    // Validate card configuration before reserving inventory or creating an order.
+    if (paymentMethod === 'card') getStripe();
     if (shippingRate && (!Number.isFinite(shippingRate.amount) || shippingRate.amount < 0)) {
       throw inputError('Invalid shipping amount');
     }
@@ -182,7 +188,7 @@ exports.createCheckoutSession = async (req, res) => {
     }
 
     // Create Stripe session
-    const session = await stripe.checkout.sessions.create({
+    const session = await getStripe().checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: lineItems,
       mode: 'payment',
@@ -214,7 +220,7 @@ exports.handleWebhook = async (req, res) => {
 
   try {
     if (process.env.STRIPE_WEBHOOK_SECRET && process.env.STRIPE_WEBHOOK_SECRET !== 'whsec_your_webhook_secret_here') {
-      event = stripe.webhooks.constructEvent(
+      event = getStripe().webhooks.constructEvent(
         req.body,
         sig,
         process.env.STRIPE_WEBHOOK_SECRET
@@ -283,7 +289,7 @@ exports.getOrderBySession = async (req, res) => {
 
     // Verify payment with Stripe when the webhook has not arrived yet.
     if (order.status === 'pending') {
-      const session = await stripe.checkout.sessions.retrieve(sessionId);
+      const session = await getStripe().checkout.sessions.retrieve(sessionId);
       if (session.payment_status !== 'paid') return res.json({ order });
       order.status = 'paid';
       order.paymentStatus = 'paid';

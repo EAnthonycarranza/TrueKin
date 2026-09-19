@@ -17,15 +17,19 @@ export default function OrderSuccess() {
     const orderId = searchParams.get('order');
     const email = searchParams.get('email');
     const request = sessionId ? api.getOrderBySession(sessionId) : orderId && email ? api.trackOrders({ orderId, email }) : null;
+    let ignore = false;
     if (request) {
       request.then((d) => {
+        if (ignore) return;
         setOrder(d.order);
         if (d.order.paymentMethod === 'pay_on_pickup' || d.order.status !== 'pending') clearCart();
-      }).catch(() => {}).finally(() => setLoading(false));
-    } else { setLoading(false); }
+      }).catch(() => {}).finally(() => { if (!ignore) setLoading(false); });
+    }
+    return () => { ignore = true; };
   }, [searchParams, clearCart]);
 
-  if (loading) return <div className="loading-page"><div className="spinner" /></div>;
+  const hasReference = searchParams.has('session_id') || (searchParams.has('order') && searchParams.has('email'));
+  if (loading && hasReference) return <div className="loading-page"><div className="spinner" /></div>;
 
   return (
     <div className="page">

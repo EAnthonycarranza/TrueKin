@@ -58,6 +58,9 @@ function validateOrderStatus(order, status, paymentReceived = false) {
   if (payAtPickup && order.paymentStatus !== 'paid' && status === 'paid') {
     throw inputError('Confirm payment received when marking this order picked up');
   }
+  if (pickup && !payAtPickup && ['ready_for_pickup', 'picked_up'].includes(status) && order.paymentStatus !== 'paid' && !order.stripePaymentIntentId && order.status !== 'paid') {
+    throw inputError('Confirm online payment before preparing this order for collection');
+  }
   if (status === 'ready_for_pickup' && !['paid', 'processing', 'ready_for_pickup', ...(payAtPickup ? ['pending'] : [])].includes(order.status)) {
     throw inputError('Only a paid or processing order can be marked ready for pickup');
   }

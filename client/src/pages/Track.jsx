@@ -29,18 +29,22 @@ export default function Track() {
   const [params, setParams] = useSearchParams();
   const [email, setEmail] = useState(params.get('email') || '');
   const [orderId, setOrderId] = useState(params.get('order') || '');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(() => !!(params.get('email') && params.get('order')));
   const [order, setOrder] = useState(null);
   const [orders, setOrders] = useState(null);
 
   useEffect(() => {
+    let ignore = false;
     const urlEmail = params.get('email');
     const urlOrder = params.get('order');
     if (urlEmail && urlOrder) {
-      lookup({ email: urlEmail, orderId: urlOrder });
+      api.trackOrders({ email: urlEmail, orderId: urlOrder })
+        .then((data) => { if (!ignore) { setOrder(data.order || null); setOrders(data.orders || null); } })
+        .catch((err) => { if (!ignore) toast.error(err.message || 'Could not find that order'); })
+        .finally(() => { if (!ignore) setLoading(false); });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return () => { ignore = true; };
+  }, [params]);
 
   const lookup = async ({ email: e = email, orderId: o = orderId } = {}) => {
     if (!e) {

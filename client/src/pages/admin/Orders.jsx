@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Eye, Package, Trash2, Download, Upload, Loader } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { statusLabel } from '../../utils/fulfillment';
+import { statusLabel, pickupPaymentDue } from '../../utils/fulfillment';
 import { api } from '../../api/client';
 import AdminLayout from '../../components/AdminLayout';
 import ConfirmModal from '../../components/ConfirmModal';
@@ -22,21 +22,23 @@ export default function AdminOrders() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
+  const [fulfillment, setFulfillment] = useState('');
+  const requestVersion = useRef(0);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importReport, setImportReport] = useState(null);
   const fileInput = useRef(null);
 
-  const fetchOrders = () => {
-    setLoading(true);
-    api.adminGetOrders(filter)
-      .then((d) => setOrders(d.orders))
-      .catch(() => toast.error('Failed to load orders'))
-      .finally(() => setLoading(false));
-  };
+  const fetchOrders = useCallback(() => {
+    const version = ++requestVersion.current;
+    api.adminGetOrders(filter, fulfillment)
+      .then((d) => { if (version === requestVersion.current) setOrders(d.orders); })
+      .catch(() => { if (version === requestVersion.current) toast.error('Failed to load orders'); })
+      .finally(() => { if (version === requestVersion.current) setLoading(false); });
+  }, [filter, fulfillment]);
 
-  useEffect(() => { fetchOrders(); }, [filter]);
+  useEffect(() => { fetchOrders(); return () => { requestVersion.current += 1; }; }, [fetchOrders]);
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -45,6 +47,7 @@ export default function AdminOrders() {
       await api.adminDeleteOrder(deleteTarget._id);
       toast.success(`Order #${deleteTarget._id.slice(-8).toUpperCase()} deleted`);
       setDeleteTarget(null);
+      setLoading(true);
       fetchOrders();
     } catch (err) {
       toast.error(err.message || 'Could not delete the order');
@@ -67,7 +70,7 @@ export default function AdminOrders() {
       const changed = report.created + report.updated;
       if (changed) toast.success(`${report.created} restored, ${report.updated} updated`);
       if (report.failed) toast.error(`${report.failed} ${report.failed === 1 ? 'row' : 'rows'} could not be imported`);
-      if (changed) fetchOrders();
+      if (changed) { setLoading(true); fetchOrders(); }
     } catch (err) {
       toast.error(err.message || 'Import failed');
     } finally {
@@ -80,6 +83,8 @@ export default function AdminOrders() {
     { v: 'pending', l: 'Pending' },
     { v: 'paid', l: 'Paid' },
     { v: 'processing', l: 'Processing' },
+    { v: 'ready_for_pickup', l: 'Ready for pickup' },
+    { v: 'picked_up', l: 'Picked up' },
     { v: 'shipped', l: 'Shipped' },
     { v: 'delivered', l: 'Delivered' },
     { v: 'cancelled', l: 'Cancelled' },
@@ -93,7 +98,7 @@ export default function AdminOrders() {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <a
             className="btn btn-secondary"
-            href={api.adminExportOrdersUrl(filter)}
+            href={api.adminExportOrdersUrl(filter, fulfillment)}
             download
           >
             <Download size={15} /> Export CSV
@@ -135,13 +140,18 @@ export default function AdminOrders() {
           )}
         </div>
       )}
+      <div className="admin-fulfillment-filter" role="group" aria-label="Fulfillment filter">
+        {[['', 'All orders'], ['pickup', 'Pickup'], ['shipping', 'Shipping']].map(([value, label]) => <button key={value} className={`chip ${fulfillment === value ? 'chip-active' : ''}`} aria-pressed={fulfillment === value} onClick={() => { if (value !== fulfillment) { setLoading(true); setFulfillment(value); } }}>{label}</button>)}
+        <Link to="/admin/pickup-locations" className="btn btn-secondary btn-sm">Manage pickup locations</Link>
+      </div>
       {/* Status filter chips */}
       <div className="admin-order-filters" style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
         {statusFilters.map((s) => (
           <button
             key={s.v}
             className={`chip ${filter === s.v ? 'chip-active' : ''}`}
-            onClick={() => setFilter(s.v)}
+            aria-pressed={filter === s.v}
+            onClick={() => { if (s.v !== filter) { setLoading(true); setFilter(s.v); } }}
           >
             {s.l}
           </button>
@@ -161,7 +171,7 @@ export default function AdminOrders() {
                   <th>Items</th>
                   <th>Total</th>
                   <th>Status</th>
-                  <th>Tracking</th>
+                  <th>Fulfillment</th>
                   <th>Date</th>
                   <th style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
@@ -191,11 +201,11 @@ export default function AdminOrders() {
                       </td>
                       <td data-label="Customer">
                         <div className="admin-customer-name" style={{ fontWeight: 500 }}>
-                          {order.user?.name || order.guestEmail || 'Guest'}
+                          {order.pickup?.contactName || order.user?.name || order.guestEmail || 'Guest'}
                         </div>
-                        {order.user?.email && (
+                        {(order.user?.email || order.guestEmail) && (
                           <div className="admin-customer-email" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                            {order.user.email}
+                            {order.user?.email || order.guestEmail}
                           </div>
                         )}
                       </td>
@@ -204,14 +214,15 @@ export default function AdminOrders() {
                       </td>
                       <td data-label="Total" style={{ fontWeight: 700 }}>
                         ${(order.totalAmount / 100).toFixed(2)}
+                        {pickupPaymentDue(order) && <small style={{ display: 'block', color: 'var(--text-secondary)', fontWeight: 400 }}>Due at pickup</small>}
                       </td>
                       <td data-label="Status">
                         <span className={`badge ${statusBadge[order.status] || 'badge-gray'}`}>
                           {statusLabel(order.status)}
                         </span>
                       </td>
-                      <td data-label="Tracking">
-                        {order.shippoTrackingNumber ? (
+                      <td data-label="Fulfillment" className="admin-pickup-cell">
+                        {order.fulfillmentMethod === 'pickup' ? <span><strong>Pickup</strong><small>{order.pickup?.name || 'Coordinate location'}</small></span> : order.shippoTrackingNumber ? (
                           <a
                             href={order.shippoTrackingUrl}
                             target="_blank"
@@ -222,7 +233,7 @@ export default function AdminOrders() {
                             {order.shippoTrackingNumber.slice(0, 10)}…
                           </a>
                         ) : (
-                          <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>—</span>
+                          <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Shipping</span>
                         )}
                       </td>
                       <td data-label="Date" style={{ color: 'var(--text-muted)', fontSize: 13 }}>

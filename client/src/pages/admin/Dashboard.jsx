@@ -62,14 +62,14 @@ export default function AdminDashboard() {
       value: stats?.paidOrders || 0,
       icon: Package,
       accent: '#f59e0b',
-      sub: 'Awaiting fulfillment',
+      sub: 'Payment received',
     },
     {
-      label: 'Shipped',
-      value: stats?.shippedOrders || 0,
+      label: 'Ready for pickup',
+      value: stats?.readyForPickupOrders || 0,
       icon: Truck,
       accent: '#3b82f6',
-      sub: 'In transit',
+      sub: 'Awaiting collection',
     },
   ];
 
@@ -282,6 +282,7 @@ export default function AdminDashboard() {
                       <span className={`badge ${statusBadge[order.status] || 'badge-gray'}`}>
                         {statusLabel(order.status)}
                       </span>
+                      {pickupPaymentDue(order) && <small className="pickup-help" style={{ display: 'block' }}>Payment due at pickup</small>}
                     </td>
                     <td data-label="Date" style={{ textAlign: 'right', color: 'var(--text-muted)', fontSize: 13 }}>
                       {new Date(order.createdAt).toLocaleDateString()}
