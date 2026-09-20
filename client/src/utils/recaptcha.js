@@ -10,14 +10,14 @@ function loadRecaptcha() {
   if (!SITE_KEY) {
     return Promise.reject(new Error('Human verification is not configured. Please try again later.'));
   }
-  if (window.grecaptcha) return Promise.resolve(window.grecaptcha);
+  if (window.grecaptcha?.enterprise) return Promise.resolve(window.grecaptcha.enterprise);
   if (scriptPromise) return scriptPromise;
 
   scriptPromise = new Promise((resolve, reject) => {
     const existing = document.querySelector('script[data-truekin-recaptcha]');
     const script = existing || document.createElement('script');
 
-    const handleLoad = () => resolve(window.grecaptcha);
+    const handleLoad = () => resolve(window.grecaptcha?.enterprise);
     const handleError = () => {
       scriptPromise = undefined;
       reject(new Error('Human verification could not load. Please refresh and try again.'));
@@ -26,7 +26,7 @@ function loadRecaptcha() {
     script.addEventListener('load', handleLoad, { once: true });
     script.addEventListener('error', handleError, { once: true });
     if (!existing) {
-      script.src = `https://www.google.com/recaptcha/api.js?render=${encodeURIComponent(SITE_KEY)}`;
+      script.src = `https://www.google.com/recaptcha/enterprise.js?render=${encodeURIComponent(SITE_KEY)}`;
       script.async = true;
       script.defer = true;
       script.dataset.truekinRecaptcha = 'true';
