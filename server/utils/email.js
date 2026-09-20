@@ -168,7 +168,7 @@ function wrapEmail(bodyHtml, preheader = '') {
             <tr>
               <td class="header" style="padding:34px 48px 28px;background-color:${C.card};text-align:center;border-bottom:1.5px solid ${C.ink};">
                 <img src="cid:${LOGO_CID}" width="110" alt="Truekin" style="display:block;margin:0 auto 10px;width:110px;max-width:110px;height:auto;border:0;outline:none;text-decoration:none;"/>
-                <div style="font-size:10px;letter-spacing:0.32em;color:${C.brand};text-transform:uppercase;font-weight:800;">Faith Worn Well</div>
+                <div style="font-size:10px;letter-spacing:0.32em;color:${C.brand};text-transform:uppercase;font-weight:800;">Stand True. Stay Loyal.</div>
               </td>
             </tr>
 
@@ -337,7 +337,7 @@ function plainFooter(order) {
     `Track your order: ${trackUrl(order)}`,
     '',
     '--',
-    'TRUEKIN — Faith Worn Well',
+    'TRUEKIN — Stand True. Stay Loyal.',
     'Small-batch. Made to order. Pressed by hand.',
     'Reply to this email and it reaches a real person.',
   ];

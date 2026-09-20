@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../api/client';
+import { BRAND_SERVICES, BRAND_SLOGAN } from '../content/brand';
 
 const EMPTY_QUOTE = {
   name: '',
@@ -20,38 +21,38 @@ const EMPTY_QUOTE = {
 const PROCESS_STEPS = [
   {
     icon: MessageSquare,
-    title: 'Tell us the story',
+    title: 'Tell us the idea',
     desc:
-      'Share your idea, team, event, or church. The clearer the vision, the sharper the quote.',
+      'Choose the service and share your artwork, quantity, dimensions, audience, and deadline.',
   },
   {
     icon: Palette,
     title: 'We mock it up',
     desc:
-      'You get art proofs, blank options, and a written quote — free, no strings.',
+      'You get a clear proof, material or product options, and a written quote before production.',
   },
   {
     icon: Scissors,
-    title: 'Approved · pressed',
+    title: 'Approved · made',
     desc:
-      'Once you sign off, every shirt is heat-pressed by hand in small batches.',
+      'Once you sign off, we print, press, cut, or engrave the job with close attention to finish.',
   },
   {
     icon: Package,
     title: 'Packed + handed over',
     desc:
-      'Sorted by size, folded, bagged. Free local pickup — in your hands in 7–14 days.',
+      'Everything is quality-checked, packed, and coordinated with you for a smooth local handoff.',
   },
 ];
 
 const FAQS = [
   {
-    q: "What's the minimum order?",
-    a: '12 shirts. No maximum — we\'ve pressed runs of 500+ for churches and events.',
+    q: 'What can I order?',
+    a: 'DTF printing, custom shirts, stickers, engraving, and bulk orders. Share the idea and we’ll help choose the right process.',
   },
   {
     q: 'Do I need finished artwork?',
-    a: 'No. Send a rough sketch, a reference photo, or even just a verse. We\'ll refine it with you before anything hits the press.',
+    a: 'No. Send a rough sketch, reference photo, logo, or written idea. We’ll refine it with you before anything goes into production.',
   },
   {
     q: 'Which blanks do you use?',
@@ -67,7 +68,7 @@ const FAQS = [
   },
   {
     q: 'How does pricing work?',
-    a: 'Quantity, print colors, and blank choice drive the price. Bigger runs mean lower per-shirt cost. Every quote is written, so there are no surprises.',
+    a: 'Quantity, size, material, finish, and production method drive the price. Every quote is written, so there are no surprises.',
   },
 ];
 
@@ -115,15 +116,15 @@ export default function Quote() {
       {/* ============  HERO  ============ */}
       <section className="tk-quote-hero">
         <div className="container">
-          <span className="tk-quote-eyebrow">Request a Custom Quote</span>
+          <span className="tk-quote-eyebrow">{BRAND_SLOGAN}</span>
           <h1 className="tk-quote-h1">
-            Your story,<br />
-            <span className="tk-quote-accent">pressed by hand.</span>
+            Your idea,<br />
+            <span className="tk-quote-accent">made to last.</span>
           </h1>
           <p className="tk-quote-sub">
-            From 12 shirts to five hundred, we handle the whole run — art,
-            blanks, press, and handoff — with the same care whether you're a
-            small group, a church, a team, or a business.
+            DTF printing, custom shirts, stickers, engraving, and bulk orders —
+            one place to turn your artwork into a finished piece for your group,
+            event, business, or brand.
           </p>
           <div className="tk-quote-hero-actions">
             <a href="#quote-form" className="btn btn-primary btn-lg">
@@ -137,8 +138,8 @@ export default function Quote() {
 
           <div className="tk-quote-stats">
             <div className="tk-quote-stat">
-              <strong>12</strong>
-              <span>Shirt minimum</span>
+              <strong>5</strong>
+              <span>Core services</span>
             </div>
             <span className="tk-quote-stat-div" />
             <div className="tk-quote-stat">
@@ -160,7 +161,7 @@ export default function Quote() {
           <header className="tk-quote-section-head">
             <span className="tk-quote-eyebrow dark">How it works</span>
             <h2 className="tk-quote-h2">
-              From first message to folded shirts.
+              From first message to finished piece.
             </h2>
           </header>
           <div className="tk-quote-process-grid">
@@ -196,11 +197,9 @@ export default function Quote() {
                 a written price.
               </p>
               <ul className="tk-quote-list">
-                <li><Check size={14} /> Free art + mockup review</li>
-                <li><Check size={14} /> Unisex fit · sizes XS–3XL</li>
-                <li><Check size={14} /> Premium blanks (Bella + Canvas · Gildan · Comfort Colors)</li>
-                <li><Check size={14} /> No deposit to get a quote</li>
-                <li><Check size={14} /> Made-to-order · small-batch pressed</li>
+                {BRAND_SERVICES.map((service) => (
+                  <li key={service.title}><Check size={14} /> {service.title}</li>
+                ))}
               </ul>
 
               <div className="tk-quote-side-card">
@@ -246,7 +245,7 @@ export default function Quote() {
                 <form onSubmit={handleSubmit} className="tk-quote-form">
                   <div className="tk-quote-form-head">
                     <MessageSquare size={16} />
-                    <strong>Custom Order Details</strong>
+                    <strong>Project Details</strong>
                   </div>
 
                   <div className="tk-quote-row">
@@ -330,7 +329,7 @@ export default function Quote() {
                       maxLength={4000}
                       value={quote.details}
                       onChange={handleChange('details')}
-                      placeholder="Tell us about the design, colors, sizes, blank preference, budget — anything that helps us quote it right. Attachments can follow by email."
+                      placeholder="Tell us which service you need, your design, quantity, colors, sizes or dimensions, material, and budget. Attachments can follow by email."
                     />
                   </label>
 
@@ -344,7 +343,7 @@ export default function Quote() {
                   </button>
                   <p className="tk-quote-note">
                     By submitting, you agree to be contacted by Truekin about
-                    this order. Unisex fit only · heat-pressed by hand.
+                    this project. {BRAND_SLOGAN}
                   </p>
                 </form>
               )}

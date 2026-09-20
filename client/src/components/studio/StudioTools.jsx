@@ -8,7 +8,7 @@ const CATEGORIES = CLIPART_CATEGORIES.filter(c => c.name !== 'Shapes');
 const ALL_ASSETS = CATEGORIES.flatMap(c => c.items.map(item => ({ ...item, category: c.name })));
 
 export default function StudioTools({ tool, productType, color, onProductChange, onColorChange, onAddText, onAddImage, onAddShape, layers, selected, onCommand, onClose, busy }) {
-  const [text, setText] = useState('FAITH WORN WELL');
+  const [text, setText] = useState('STAND TRUE. STAY LOYAL.');
   const [font, setFont] = useState('Oswald');
   const [ink, setInk] = useState('#181818');
   const [category, setCategory] = useState('Studio Picks');

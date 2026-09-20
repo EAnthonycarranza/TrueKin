@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  ArrowRight, MapPin, Shield, RefreshCw, Sparkles, Star, Check,
-  Cross, Heart, Users, Flame, Scissors, Package,
-  Palette, Send, Building2, CalendarDays, MessageSquare,
+  ArrowRight, MapPin, Star, Check, Cross, Users, Flame, Scissors,
+  Package, Send, Building2, CalendarDays, MessageSquare, Printer,
+  Shirt, Sticker, ScanLine, Boxes,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../api/client';
 import ProductCard from '../components/ProductCard';
 import { ShieldMark, KnotMark, StackMark, Wordmark } from '../components/brand/Logo';
+import { BRAND_SERVICES, BRAND_SLOGAN } from '../content/brand';
 
 const EMPTY_QUOTE = {
   name: '',
@@ -19,6 +20,8 @@ const EMPTY_QUOTE = {
   neededBy: '',
   details: '',
 };
+
+const SERVICE_ICONS = [Printer, Shirt, Sticker, ScanLine, Boxes];
 
 /**
  * The three hero cards fall back to these when the admin hasn't chosen a
@@ -121,7 +124,7 @@ export default function Home() {
         <div className="container home-hero-inner">
           <div className="home-hero-content">
             <span className="home-hero-tag stamp">
-              <Flame size={12} /> Your design · Heat-pressed by hand · Unisex fit
+              <Flame size={12} /> {BRAND_SLOGAN} · Custom apparel made to order
             </span>
             <h1 className="home-hero-title display">
               <span className="home-hero-line">Your design,</span>
@@ -131,11 +134,10 @@ export default function Home() {
             </h1>
             <span className="rule rule-brand" aria-hidden />
             <p className="home-hero-desc">
-              Truekin is a heat-press shop built around <strong>your</strong>
-              {' '}artwork. Send us your logo, your team graphic, your church
-              crest — we'll cut it, press it by hand onto a premium unisex tee,
-              and hand it to you in person. We also release a small line of our
-              own designs, but the main thing we do is press yours.
+              Truekin is a custom apparel shop built around <strong>your</strong>
+              {' '}ideas. From DTF printing and custom shirts to stickers,
+              engraving, and bulk orders, we turn your artwork into something
+              polished, useful, and made to last.
             </p>
             <div className="home-hero-cta">
               <a href="#quote" className="btn btn-primary btn-xl">
@@ -183,13 +185,12 @@ export default function Home() {
           {Array.from({ length: 2 }).map((_, i) => (
             <div className="home-marquee-row" key={i}>
               {[
-                'Custom-Made Shirts',
-                'For Your Church',
-                'For Your Team',
-                'For Your Event',
-                'Unisex Fit Only',
-                'Heat-Pressed By Hand',
-                'Bring Your Design',
+                'DTF Printing',
+                'Custom Shirts',
+                'Stickers',
+                'Engraving',
+                'Bulk Orders',
+                BRAND_SLOGAN,
               ].map((t) => (
                 <span key={`${i}-${t}`} className="home-marquee-item">
                   {t} <span className="home-marquee-sep">✦</span>
@@ -197,6 +198,42 @@ export default function Home() {
               ))}
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* ================  SERVICES FROM THE TRUEKIN CARD  ================ */}
+      <section className="home-services" aria-labelledby="home-services-title">
+        <div className="container">
+          <div className="home-services-head">
+            <div>
+              <span className="section-eyebrow">Custom Apparel + More</span>
+              <h2 id="home-services-title" className="home-services-title display">What we make.</h2>
+              <span className="rule rule-brand" aria-hidden />
+            </div>
+            <p>
+              One shop for the pieces that help your church, team, business,
+              event, or idea show up with a clear identity.
+            </p>
+          </div>
+          <div className="home-services-grid">
+            {BRAND_SERVICES.map((service, index) => {
+              const Icon = SERVICE_ICONS[index];
+              return (
+                <article key={service.title} className="home-service-card">
+                  <div className="home-service-icon"><Icon size={22} /></div>
+                  <span className="home-service-number">0{index + 1}</span>
+                  <h3 className="display-condensed">{service.title}</h3>
+                  <p>{service.description}</p>
+                </article>
+              );
+            })}
+          </div>
+          <div className="home-services-cta">
+            <span className="stamp">{BRAND_SLOGAN}</span>
+            <a href="#quote" className="btn btn-brand">
+              Tell us what you need <ArrowRight size={16} />
+            </a>
+          </div>
         </div>
       </section>
 
@@ -354,19 +391,19 @@ export default function Home() {
                 Request a Custom Quote
               </span>
               <h2 className="home-quote-title display">
-                Tell us about<br />
-                <span style={{ color: 'var(--brand)' }}>your shirts.</span>
+                Tell us what<br />
+                <span style={{ color: 'var(--brand)' }}>you need.</span>
               </h2>
               <span className="rule rule-brand" aria-hidden />
               <p className="home-quote-lead">
-                Whether you need a dozen or five hundred, we'll price it, press
-                it, and hand it over. Most quotes go back within one business day.
+                DTF printing, custom shirts, stickers, engraving, or a bulk run —
+                share the idea and we'll reply with a clear quote and timeline.
               </p>
               <ul className="home-quote-list">
                 <li><Check size={14} /> Free art + mockup review</li>
-                <li><Check size={14} /> 12-shirt minimum · no maximum</li>
-                <li><Check size={14} /> Unisex fit · sizes XS–3XL</li>
-                <li><Check size={14} /> Premium blanks (Bella + Canvas / Gildan / Comfort Colors)</li>
+                <li><Check size={14} /> DTF printing + custom shirts</li>
+                <li><Check size={14} /> Stickers + custom engraving</li>
+                <li><Check size={14} /> Bulk-order planning + pricing</li>
                 <li><Check size={14} /> Turnaround in 7–14 days after approval</li>
               </ul>
             </div>
@@ -477,7 +514,7 @@ export default function Home() {
                       maxLength={4000}
                       value={quote.details}
                       onChange={handleQuoteChange('details')}
-                      placeholder="Tell us about the design, colors, sizes, blank preference, budget — anything that helps us quote it right. Attachments can follow by email."
+                      placeholder="Tell us which service you need, your design, quantity, colors, sizes or dimensions, material, and budget. Attachments can follow by email."
                     />
                   </label>
 
@@ -491,35 +528,11 @@ export default function Home() {
                   </button>
                   <p className="home-quote-note">
                     By submitting, you agree to be contacted by Truekin about
-                    this order. Unisex fit only · heat-pressed by hand.
+                    this project. {BRAND_SLOGAN}
                   </p>
                 </form>
               )}
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ================  FEATURES  ================ */}
-      <section className="home-features">
-        <div className="container">
-          <div className="home-features-grid">
-            {[
-              { icon: Flame, title: 'Heat-Pressed By Hand', desc: 'Every tee pressed one at a time — no factory runs, no corners cut.' },
-              { icon: Heart, title: 'Premium Blanks', desc: 'Bella + Canvas, Gildan, Comfort Colors — sourced for feel and longevity.' },
-              { icon: MapPin, title: 'Free Local Pickup', desc: 'No postage, no waiting on a courier. Pressed inside 3–5 days, then we arrange the handoff with you.' },
-              { icon: RefreshCw, title: 'Honest Returns', desc: '30 days, no pressure. Your peace matters more than the sale.' },
-            ].map((f, i) => (
-              <div key={i} className="home-feature">
-                <div className="home-feature-icon">
-                  <f.icon size={20} />
-                </div>
-                <div>
-                  <h4 className="display-condensed">{f.title}</h4>
-                  <p>{f.desc}</p>
-                </div>
-              </div>
-            ))}
           </div>
         </div>
       </section>
@@ -1054,46 +1067,110 @@ export default function Home() {
           line-height: 1.6;
         }
 
-        /* ---------------- FEATURES ---------------- */
-        .home-features {
-          padding: 64px 0;
+        /* ---------------- CARD-BASED SERVICES ---------------- */
+        .home-services {
+          padding: 88px 0;
           background: var(--ink);
           color: #f4f1ea;
           border-top: 1px solid #1f1f1f;
           border-bottom: 1px solid #1f1f1f;
         }
-        .home-features-grid {
+        .home-services-head {
           display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 36px;
+          grid-template-columns: 1fr minmax(280px, 440px);
+          gap: 48px;
+          align-items: end;
+          margin-bottom: 42px;
         }
-        @media (max-width: 900px) { .home-features-grid { grid-template-columns: repeat(2, 1fr); gap: 28px; } }
-        @media (max-width: 480px) { .home-features-grid { grid-template-columns: 1fr; } }
-        .home-feature {
-          display: flex;
-          gap: 14px;
-          align-items: flex-start;
+        .home-services-title {
+          font-size: clamp(40px, 5vw, 70px);
+          font-weight: 400;
+          line-height: 0.95;
+          letter-spacing: 0.01em;
+          margin: 12px 0 14px;
         }
-        .home-feature-icon {
-          width: 44px;
-          height: 44px;
+        .home-services-head > p {
+          color: rgba(244,241,234,0.7);
+          font-size: 15.5px;
+          line-height: 1.7;
+          max-width: 42ch;
+        }
+        .home-services-grid {
+          display: grid;
+          grid-template-columns: repeat(5, minmax(0, 1fr));
+          gap: 16px;
+        }
+        .home-service-card {
+          position: relative;
+          min-height: 260px;
+          padding: 22px 20px 24px;
+          background: rgba(255,255,255,0.045);
+          border: 1px solid rgba(244,241,234,0.18);
+          border-radius: 5px;
+          transition: transform 0.22s var(--ease), border-color 0.22s, background 0.22s;
+        }
+        .home-service-card:hover {
+          transform: translateY(-4px);
+          background: rgba(255,255,255,0.07);
+          border-color: rgba(244,241,234,0.38);
+        }
+        .home-service-icon {
+          width: 46px;
+          height: 46px;
           border-radius: 4px;
-          background: rgba(255,255,255,0.08);
-          color: var(--brand);
+          background: var(--brand);
+          color: #fff;
           display: flex;
           align-items: center;
           justify-content: center;
-          flex-shrink: 0;
-          border: 1px solid rgba(255,255,255,0.14);
+          margin-bottom: 28px;
         }
-        .home-feature h4 {
-          font-size: 14px;
+        .home-service-number {
+          position: absolute;
+          top: 22px;
+          right: 18px;
+          font-family: var(--font-stamp);
+          font-size: 11px;
+          letter-spacing: 0.16em;
+          color: rgba(244,241,234,0.42);
+        }
+        .home-service-card h3 {
+          font-size: 17px;
           font-weight: 600;
           letter-spacing: 0.08em;
           text-transform: uppercase;
-          margin-bottom: 5px;
+          margin-bottom: 10px;
         }
-        .home-feature p { font-size: 13px; color: rgba(244,241,234,0.7); line-height: 1.6; }
+        .home-service-card p {
+          color: rgba(244,241,234,0.68);
+          font-size: 13px;
+          line-height: 1.65;
+        }
+        .home-services-cta {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 24px;
+          margin-top: 28px;
+          padding-top: 24px;
+          border-top: 1px solid rgba(244,241,234,0.16);
+        }
+        .home-services-cta .stamp {
+          font-size: 12px;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+          color: var(--brand);
+        }
+        @media (max-width: 1050px) {
+          .home-services-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+        @media (max-width: 720px) {
+          .home-services { padding: 64px 0; }
+          .home-services-head { grid-template-columns: 1fr; gap: 18px; }
+          .home-services-grid { grid-template-columns: 1fr; }
+          .home-service-card { min-height: 0; }
+          .home-services-cta { align-items: flex-start; flex-direction: column; }
+        }
 
         /* ---------------- PROMO ---------------- */
         .home-promo { padding: 40px 0 100px; }
@@ -1606,16 +1683,6 @@ export default function Home() {
           .home-quote-row { grid-template-columns: 1fr; gap: 12px; }
           .home-quote-field input,
           .home-quote-field textarea { min-height: 48px; font-size: 16px; }
-
-          .home-features { padding: 44px 0; }
-          .home-features-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 24px 16px;
-          }
-          .home-feature { display: block; }
-          .home-feature-icon { margin-bottom: 10px; }
-          .home-feature h4 { font-size: 12px; line-height: 1.25; }
-          .home-feature p { font-size: 12px; line-height: 1.5; }
 
           .home-promo-card { padding: 38px 22px 24px; }
           .home-promo-title { font-size: 48px; }

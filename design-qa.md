@@ -1,39 +1,43 @@
-# Truekin Mobile Experience — Design QA
+# Truekin Engraved Card — Design QA
 
-## Sources
+## Source visual truth
 
-- Existing product and brand system in `client/src/index.css` and the live local routes.
-- Studio reference: `/var/folders/fk/nx_9gdys1tx9gz6l37c3q1h80000gn/T/TemporaryItems/NSIRD_screencaptureui_EgwRZb/Screenshot 2026-09-04 at 2.33.21 PM.png`
-- Admin reference: `/var/folders/fk/nx_9gdys1tx9gz6l37c3q1h80000gn/T/TemporaryItems/NSIRD_screencaptureui_gxuj0s/Screenshot 2026-09-04 at 2.46.05 PM.png`
-- Pre-change mobile baselines captured in the Codex in-app browser from `/`, `/shop`, `/product/:id`, `/cart`, `/checkout`, `/admin`, `/admin/products`, `/admin/orders`, and `/admin/products/new`.
+- Front card: `/Users/anthony/Pictures/Photos Library.photoslibrary/resources/derivatives/6/65E711C0-A3AD-4C5B-80B1-9C44C631CD4C_1_105_c.jpeg` (1024 × 768).
+- Back card: `/Users/anthony/Pictures/Photos Library.photoslibrary/resources/derivatives/2/2C805C9D-2FC3-453F-A242-472498C3CEEF_1_105_c.jpeg` (1024 × 768).
+- Card content used as product truth: `STAND TRUE. STAY LOYAL.`, `@truekinbrand`, `truekinbrand@gmail.com`, DTF printing, custom shirts, stickers, engraving, and bulk orders. The card's `BULK OREDERS` typo was corrected in the storefront.
 
-## Implementation capture
+## Implementation captures
 
-- Screenshot: `/Users/acarranza/Documents/Claude Project/TruKing/admin-mobile-dashboard.png`
-- Route: `http://localhost:5173/admin`
-- Viewport: 440 × 956 device preview; also verified at 360 × 800 and 390 × 844 in the in-app browser.
-- Density/state: authenticated admin, populated stats, recent orders, and two-product catalog.
+- Desktop homepage: `docs/qa/truekin-home-desktop-viewport.png` (1430 × 993 rendered content inside a 1440 × 1000 browser viewport).
+- Mobile homepage: `docs/qa/truekin-home-mobile-viewport.png` (380 × 822 rendered content inside a 390 × 844 browser viewport).
+- Route/state: `http://localhost:5173/`, unauthenticated initial homepage state.
+- Secondary route/state: `http://localhost:5173/quote`, unauthenticated quote page at the mobile breakpoint.
 
-## Comparison and fix history
+## Fidelity review
 
-1. The original admin navigation became a tall, horizontally clipped desktop sidebar on phones. Replaced it with a 58px sticky four-destination tab bar; all destinations remain visible at 360px.
-2. Product and order tables clipped key fields and actions. Converted them into responsive management cards with complete metadata, readable customer data, and full-width touch actions.
-3. The dashboard required excessive scrolling before reaching useful shortcuts. Reworked the metrics into a compact 2 × 2 grid and tightened the quick-action cards while preserving the brand hierarchy.
-4. The new-product hero squeezed the title and description between decorative columns. Removed the redundant mobile mark, stacked the hierarchy, and made the unisex context and primary workflow immediately readable.
-5. Editor forms and inventory controls had small targets and desktop-first grids. Raised controls to mobile-safe sizes, stacked fields and editor choices, changed inventory to a compact card layout, and made the sticky release controls thumb-friendly.
-6. Storefront navigation, catalog cards, product details, cart, checkout, filters, footer, and the T-shirt studio were checked and adjusted for phone-width wrapping, touch targets, and content order.
+- Typography: passed. The existing condensed, all-caps display system was retained and now carries the engraved card's slogan and service language prominently.
+- Spacing and layout rhythm: passed. The hero hierarchy remains clear, the five-service section uses a consistent desktop grid and mobile stack, and no horizontal overflow was observed.
+- Color and tokens: passed. The established cream, ink black, and ember-red palette closely reflects the warm engraved wood contrast without replacing the storefront's existing design system.
+- Assets and image quality: passed. Existing authored Truekin marks were reused; the source photographs were treated as content references rather than embedded as low-resolution page artwork.
+- Copy and content: passed. The exact slogan, real Instagram handle, real contact email, and all five service categories appear with useful descriptions on the homepage, quote page, and footer. Email templates and Studio starter text also use the slogan.
+- Protected checkout content: passed. The coordinator heading, explanatory sentence, and `Tone Velez · Admin@Truking.com` contact remain unchanged.
 
-## Final verification
+## Comparison and interaction history
 
-- 390px route sweep: `/`, `/shop`, `/product/:id`, `/cart`, `/quote`, `/track`, `/login`, `/register`, `/admin`, `/admin/products`, `/admin/orders`, `/admin/products/new` — no horizontal document overflow.
-- Checkout was separately verified at 390px with a populated cart; the final route sweep correctly redirected an empty cart back to `/cart`.
-- Admin navigation interaction verified at 360px across Dashboard, Products, New Drop, and Orders.
-- Order detail verified in both labeled and pending/no-label states, including status, parcel, rate, and fulfillment controls.
-- Desktop regression checked at 1280 × 900 for the admin dashboard; sidebar, page actions, stats, quick actions, and table layout remained intact.
-- Production build: passed (`npm run build`).
+1. Compared both card faces with the desktop and mobile homepage captures in one review pass. The first implementation pass matched the card's core brand signals, so no P0, P1, or P2 visual discrepancy required another code iteration.
+2. Verified there is exactly one rendered services section and one quote section. A discarded full-page CDP capture showed a browser tiling artifact; viewport captures above are the reliable visual evidence.
+3. Opened and closed the mobile navigation at 390 × 844; all primary destinations remained available.
+4. Activated `Tell us what you need` and confirmed it targets `#quote` and reveals the quote heading.
+5. Inspected the mobile quote route and confirmed the five service descriptions and required project fields remain readable.
+6. Browser console errors: none.
+
+## Engineering verification
+
+- Client production build: passed (`npm run build`).
+- Server test suite: passed (16/16 tests).
 - Git whitespace validation: passed (`git diff --check`).
-- Full repository lint remains blocked by existing AppleDouble `._*` files and pre-existing React hook/ref warnings outside this responsive pass.
+- Focused lint for changed files: passed except for the pre-existing `react-hooks/set-state-in-effect` finding in `Navbar.jsx`.
 
 ## Result
 
-Passed. The primary storefront journey, admin management surfaces, and studio fit the tested mobile viewports without horizontal overflow, clipped actions, or desktop-only interaction patterns.
+final result: passed

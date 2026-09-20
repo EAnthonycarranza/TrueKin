@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { useCartStore } from '../store/cartStore';
 import { ShieldMark, Wordmark } from './brand/Logo';
+import { BRAND_SLOGAN } from '../content/brand';
 
 export default function Navbar() {
   const { user, logout } = useAuthStore();
@@ -76,7 +77,7 @@ export default function Navbar() {
       {!isAdminRoute && (
         <div style={styles.announce}>
           <div style={styles.announceInner} className="announce-marquee">
-            <span>FAITH WORN WELL</span>
+            <span>{BRAND_SLOGAN.toUpperCase()}</span>
             <span style={styles.announceDot}>✦</span>
             <span>HEAT-PRESSED BY HAND</span>
             <span style={styles.announceDot}>✦</span>
@@ -86,7 +87,7 @@ export default function Navbar() {
             <span style={styles.announceDot}>✦</span>
             <span>BELLA + CANVAS · GILDAN · COMFORT COLORS</span>
             <span style={styles.announceDot}>✦</span>
-            <span>FAITH WORN WELL</span>
+            <span>{BRAND_SLOGAN.toUpperCase()}</span>
             <span style={styles.announceDot}>✦</span>
             <span>HEAT-PRESSED BY HAND</span>
             <span style={styles.announceDot}>✦</span>

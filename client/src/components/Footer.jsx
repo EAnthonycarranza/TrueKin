@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
-import { Instagram, Facebook, Mail, ArrowUpRight } from 'lucide-react';
+import { Instagram, Mail, ArrowUpRight } from 'lucide-react';
 import { ShieldMark, Wordmark } from './brand/Logo';
+import { BRAND_CONTACT, BRAND_SERVICES, BRAND_SLOGAN } from '../content/brand';
 
 export default function Footer() {
   const year = new Date().getFullYear();
@@ -15,35 +16,26 @@ export default function Footer() {
               <ShieldMark size={40} />
               <Wordmark height={22} />
             </div>
+            <strong className="tk-footer-slogan">{BRAND_SLOGAN}</strong>
             <p>
-              Christian custom tees — heat-pressed by hand on premium blanks
-              from Bella + Canvas, Gildan, and Comfort Colors. Designed,
-              printed, and prayed over in-house. Every tee for the kin.
+              Custom apparel and branded goods made with care — DTF printing,
+              custom shirts, stickers, engraving, and coordinated bulk orders.
             </p>
             <div className="tk-footer-verse stamp">
               "So if the Son sets you free, you will be free indeed." — John 8:36
             </div>
             <div className="tk-footer-social" role="list">
               <a
-                href="https://www.instagram.com/"
+                href={BRAND_CONTACT.instagramUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label="Instagram"
-                title="Instagram"
+                aria-label={`Instagram ${BRAND_CONTACT.instagramHandle}`}
+                title={BRAND_CONTACT.instagramHandle}
               >
                 <Instagram size={18} />
               </a>
               <a
-                href="https://www.facebook.com/"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Facebook"
-                title="Facebook"
-              >
-                <Facebook size={18} />
-              </a>
-              <a
-                href="mailto:hello@truekin.co"
+                href={`mailto:${BRAND_CONTACT.email}`}
                 aria-label="Email"
                 title="Email us"
               >
@@ -61,23 +53,21 @@ export default function Footer() {
             <Link to="/quote">Custom Quote</Link>
           </div>
 
-          {/* Support */}
+          {/* Services from the engraved Truekin card */}
           <div className="tk-footer-col">
-            <h5>Support</h5>
-            <a href="mailto:hello@truekin.co">Contact</a>
-            <Link to="/quote">Request a Quote</Link>
-            <Link to="/pickup">Pickup Locations</Link>
-            <Link to="/track">Track Your Order</Link>
-            <a href="#">Returns</a>
+            <h5>Services</h5>
+            {BRAND_SERVICES.map((service) => (
+              <Link key={service.title} to="/quote">{service.title}</Link>
+            ))}
           </div>
 
-          {/* Story */}
+          {/* Connect */}
           <div className="tk-footer-col">
-            <h5>Our Story</h5>
-            <a href="#">Mission</a>
-            <a href="#">Ministry Partners</a>
-            <a href="#">Sustainability</a>
-            <a href="#">Press</a>
+            <h5>Connect</h5>
+            <a href={BRAND_CONTACT.instagramUrl} target="_blank" rel="noopener noreferrer">{BRAND_CONTACT.instagramHandle}</a>
+            <a href={`mailto:${BRAND_CONTACT.email}`}>{BRAND_CONTACT.email}</a>
+            <Link to="/pickup">Pickup Locations</Link>
+            <Link to="/track">Track Your Order</Link>
           </div>
         </div>
 
@@ -146,6 +136,15 @@ export default function Footer() {
           font-size: 14px;
           line-height: 1.7;
           margin-bottom: 14px;
+        }
+        .tk-footer-slogan {
+          display: block;
+          margin-bottom: 9px;
+          font-family: var(--font-secondary, inherit);
+          font-size: 13px;
+          letter-spacing: 0.13em;
+          text-transform: uppercase;
+          color: var(--ink, #0a0a0a);
         }
         .tk-footer-verse {
           font-size: 12.5px;
