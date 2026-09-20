@@ -20,7 +20,8 @@ exports.createCheckoutSession = async (req, res) => {
     if (!['shipping', 'pickup'].includes(fulfillmentMethod)) throw inputError('Choose shipping or pickup');
     if (!['card', 'pay_on_pickup'].includes(paymentMethod)) throw inputError('Choose a valid payment method');
     if (paymentMethod === 'pay_on_pickup' && fulfillmentMethod !== 'pickup') throw inputError('Payment at pickup is only available for pickup orders');
-    if (!req.user && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(readText(guestEmail, 'Email', 254, true))) {
+    const checkoutEmail = readText(guestEmail, 'Email', 254, true).toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(checkoutEmail)) {
       throw inputError('Enter a valid email address');
     }
     let pickup;
@@ -159,7 +160,10 @@ exports.createCheckoutSession = async (req, res) => {
     // Create order in DB — persist rateId so the webhook can auto-purchase the label
     const order = await Order.create({
       user: req.user?._id || undefined,
-      guestEmail: guestEmail || undefined,
+      // Every checkout explicitly supplies its delivery address for order mail,
+      // even when the customer is signed in. This keeps confirmations tied to
+      // the address they entered at checkout rather than a stale account value.
+      guestEmail: checkoutEmail,
       items: orderItems,
       totalAmount,
       fulfillmentMethod,
@@ -200,7 +204,7 @@ exports.createCheckoutSession = async (req, res) => {
         shippoRateId: shippingRate?.rateId || '',
         fulfillmentMethod,
       },
-      customer_email: req.user?.email || guestEmail || undefined,
+      customer_email: checkoutEmail,
     });
 
     order.stripeSessionId = session.id;

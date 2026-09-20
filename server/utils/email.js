@@ -368,9 +368,13 @@ async function deliver({ to, subject, html, text, tag }) {
     console.warn(`Email not configured, skipping ${tag}.`);
     return;
   }
+  const configuredFrom = (process.env.EMAIL_FROM || process.env.SMTP_USER).trim();
+  const from = configuredFrom.includes('<')
+    ? configuredFrom
+    : `Truekin <${configuredFrom}>`;
   try {
     const info = await transporter.sendMail({
-      from: `Truekin <${process.env.EMAIL_FROM || process.env.SMTP_USER}>`,
+      from,
       to,
       subject,
       html,

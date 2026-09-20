@@ -97,8 +97,27 @@ test('card pickup creates a Stripe session with no shipping charge', async () =>
   const args = stripeCreate.mock.calls[0].arguments[0];
   assert.equal(args.shipping_options, undefined);
   assert.equal(args.metadata.fulfillmentMethod, 'pickup');
+  assert.equal(args.customer_email, 'alex+pickup@example.test');
   assert.equal(created.totalAmount, 5000);
   assert.equal(confirmation.mock.callCount(), 0);
+});
+
+test('every checkout requires an explicitly submitted valid email, including signed-in customers', async () => {
+  const user = { _id: new mongoose.Types.ObjectId(), email: 'old-account@example.test' };
+  for (const guestEmail of [undefined, '', 'not-an-email']) {
+    const res = response();
+    await checkout.createCheckoutSession({ user, body: body({ guestEmail }) }, res);
+    assert.equal(res.code, 400);
+    assert.match(res.data.message, /email/i);
+    assert.equal(created, null);
+  }
+
+  const res = response();
+  await checkout.createCheckoutSession({ user, body: body({ guestEmail: '  New.Address@Example.Test  ' }) }, res);
+  assert.equal(res.code, 201);
+  assert.equal(created.guestEmail, 'new.address@example.test');
+  assert.equal(created.user.toString(), user._id.toString());
+  assert.equal(confirmation.mock.callCount(), 1);
 });
 
 test('rejects invalid quantities and oversized customer notes', async () => {

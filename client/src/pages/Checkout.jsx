@@ -57,10 +57,10 @@ export default function Checkout() {
         fulfillmentMethod: 'pickup',
         paymentMethod: deferredPayment ? 'pay_on_pickup' : 'card',
         pickup: { locationId, contactName: form.name, customerInstructions: notes },
-        guestEmail: !user ? form.email : undefined,
+        guestEmail: form.email,
       });
       if (result.order) {
-        const params = new URLSearchParams({ order: result.order._id, email: user?.email || form.email });
+        const params = new URLSearchParams({ order: result.order._id, email: form.email });
         navigate(`/order-success?${params}`);
       } else { window.location.href = result.url; }
     } catch (err) { toast.error(err.message || 'Checkout failed'); setLoading(false); }
@@ -75,7 +75,7 @@ export default function Checkout() {
         <div className="checkout-layout">
           <div className="checkout-form-column">
             <section className="card checkout-card"><h2 className="checkout-section-title"><span>01</span> Who’s collecting?</h2>
-              {!user && <div className="form-group"><label htmlFor="checkout-email">Email address</label><input id="checkout-email" className="input" type="email" required autoComplete="email" name="email" maxLength={254} value={form.email} onChange={handleChange} placeholder="you@example.com" /><p className="pickup-help">This is where your confirmation and your “ready for pickup” email go.</p></div>}
+              <div className="form-group"><label htmlFor="checkout-email">Email address</label><input id="checkout-email" className="input" type="email" required autoComplete="email" name="email" maxLength={254} value={form.email} onChange={handleChange} placeholder="you@example.com" /><p className="pickup-help">This is where your confirmation and your “ready for pickup” email go.</p></div>
               <div className="form-group"><label htmlFor="checkout-name">Name for pickup</label><input id="checkout-name" className="input" required maxLength={120} autoComplete="name" name="name" value={form.name} onChange={handleChange} placeholder="First and last name" /></div>
               {(locationsLoading || locations.length > 0) && <div className="form-group"><label htmlFor="pickup-location">Preferred pickup spot <span className="text-muted">(optional)</span></label><select id="pickup-location" className="input" value={locationId} onChange={(e) => setLocationId(e.target.value)} disabled={locationsLoading}><option value="">{locationsLoading ? 'Loading spots…' : 'No preference — we’ll coordinate with you'}</option>{locations.map((location) => <option key={location._id} value={location._id}>{location.name} — {location.city}</option>)}</select></div>}
               {locationsError && <p role="alert" className="pickup-status-note">{locationsError} <button type="button" className="btn btn-secondary btn-sm" onClick={() => window.location.reload()}>Refresh</button></p>}
