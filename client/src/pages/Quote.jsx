@@ -6,7 +6,9 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../api/client';
+import RecaptchaNotice from '../components/RecaptchaNotice';
 import { BRAND_SERVICES, BRAND_SLOGAN } from '../content/brand';
+import { executeRecaptcha, RECAPTCHA_ACTIONS } from '../utils/recaptcha';
 
 const EMPTY_QUOTE = {
   name: '',
@@ -94,9 +96,11 @@ export default function Quote() {
     }
     setSending(true);
     try {
+      const recaptchaToken = await executeRecaptcha(RECAPTCHA_ACTIONS.quote);
       const res = await api.submitQuote({
         ...quote,
         quantity: qty,
+        recaptchaToken,
       });
       setSentEmail(quote.email);
       setSent(true);
@@ -345,6 +349,7 @@ export default function Quote() {
                     By submitting, you agree to be contacted by Truekin about
                     this project. {BRAND_SLOGAN}
                   </p>
+                  <RecaptchaNotice />
                 </form>
               )}
             </div>

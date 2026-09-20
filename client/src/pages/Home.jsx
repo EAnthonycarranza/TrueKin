@@ -9,7 +9,9 @@ import toast from 'react-hot-toast';
 import { api } from '../api/client';
 import ProductCard from '../components/ProductCard';
 import { ShieldMark, KnotMark, StackMark, Wordmark } from '../components/brand/Logo';
+import RecaptchaNotice from '../components/RecaptchaNotice';
 import { BRAND_SERVICES, BRAND_SLOGAN } from '../content/brand';
+import { executeRecaptcha, RECAPTCHA_ACTIONS } from '../utils/recaptcha';
 
 const EMPTY_QUOTE = {
   name: '',
@@ -100,9 +102,11 @@ export default function Home() {
     }
     setQuoteSending(true);
     try {
+      const recaptchaToken = await executeRecaptcha(RECAPTCHA_ACTIONS.quote);
       const res = await api.submitQuote({
         ...quote,
         quantity: parseInt(quote.quantity, 10) || 0,
+        recaptchaToken,
       });
       toast.success(res.message || 'Quote request received.');
       setSentEmail(quote.email);
@@ -530,6 +534,7 @@ export default function Home() {
                     By submitting, you agree to be contacted by Truekin about
                     this project. {BRAND_SLOGAN}
                   </p>
+                  <RecaptchaNotice />
                 </form>
               )}
             </div>

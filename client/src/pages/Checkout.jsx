@@ -19,6 +19,8 @@ import { api } from '../api/client';
 import { useCartStore } from '../store/cartStore';
 import { useAuthStore } from '../store/authStore';
 import { PickupLocationDetails, PickupCoordinator } from '../components/PickupDetails';
+import RecaptchaNotice from '../components/RecaptchaNotice';
+import { executeRecaptcha, RECAPTCHA_ACTIONS } from '../utils/recaptcha';
 
 export default function Checkout() {
   const items = useCartStore((state) => state.items);
@@ -52,12 +54,14 @@ export default function Checkout() {
     if (loading) return;
     setLoading(true);
     try {
+      const recaptchaToken = await executeRecaptcha(RECAPTCHA_ACTIONS.checkout);
       const result = await api.createCheckoutSession({
         items: items.map((item) => ({ productId: item.productId, quantity: item.quantity, color: item.color || null, size: item.size || null, shirtStyle: item.shirtStyle || 'unisex' })),
         fulfillmentMethod: 'pickup',
         paymentMethod: deferredPayment ? 'pay_on_pickup' : 'card',
         pickup: { locationId, contactName: form.name, customerInstructions: notes },
         guestEmail: form.email,
+        recaptchaToken,
       });
       if (result.order) {
         const params = new URLSearchParams({ order: result.order._id, email: form.email });
@@ -94,6 +98,7 @@ export default function Checkout() {
             {deferredPayment && <div className="pickup-payment-summary"><div><span>Due today</span><strong>$0.00</strong></div><p>${(totalPrice / 100).toFixed(2)} due when you collect your order. We’ll coordinate the pickup spot, timing, and payment with you.</p></div>}
             <button type="submit" className="btn btn-primary btn-lg" style={{ width: '100%', marginTop: 20 }} disabled={loading}>{loading ? <><Loader size={16} className="spin" /> Placing order…</> : deferredPayment ? <>Place pickup order <ArrowRight size={18} /></> : <><CreditCard size={18} /> Pay with Stripe</>}</button>
             <p className="pickup-help text-center">{deferredPayment ? 'No online payment required.' : 'You’ll continue to Stripe’s secure checkout.'}</p><Link to="/cart" className="checkout-back-link">Back to bag</Link>
+            <RecaptchaNotice />
           </div></aside>
         </div>
       </fieldset>

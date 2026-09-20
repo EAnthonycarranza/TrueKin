@@ -1,8 +1,9 @@
 const Quote = require('../models/Quote');
+const { RECAPTCHA_ACTIONS, verifyRecaptcha } = require('../utils/recaptcha');
 
 exports.createQuote = async (req, res) => {
   try {
-    const { name, email, phone, organization, quantity, neededBy, details } = req.body;
+    const { name, email, phone, organization, quantity, neededBy, details, recaptchaToken } = req.body;
 
     if (!name || !email || !quantity || !details) {
       return res.status(400).json({
@@ -14,6 +15,11 @@ exports.createQuote = async (req, res) => {
     if (!Number.isFinite(qty) || qty < 1) {
       return res.status(400).json({ message: 'Quantity must be at least 1.' });
     }
+
+    await verifyRecaptcha({
+      token: recaptchaToken,
+      expectedAction: RECAPTCHA_ACTIONS.quote,
+    });
 
     const quote = await Quote.create({
       name: String(name).trim(),
@@ -30,7 +36,7 @@ exports.createQuote = async (req, res) => {
       quote: { id: quote._id, createdAt: quote.createdAt },
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(error.status || 500).json({ message: error.message });
   }
 };
 

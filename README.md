@@ -226,6 +226,9 @@ npm run seed
 | `PORT` · `NODE_ENV` | | Defaults to `5000` / `development` |
 | `STRIPE_SECRET_KEY` | ● | Checkout Sessions |
 | `STRIPE_WEBHOOK_SECRET` | ● | Verifies payment webhooks |
+| `RECAPTCHA_SECRET_KEY` | ● | Server-side Google reCAPTCHA verification for quotes and purchases |
+| `RECAPTCHA_MIN_SCORE` | | reCAPTCHA v3 threshold; defaults to `0.5` |
+| `VITE_RECAPTCHA_SITE_KEY` | ● | Public reCAPTCHA v3 site key embedded in the client build |
 | `SHIPPO_API_KEY` | | Live shipping rates at checkout |
 | `SMTP_HOST` · `SMTP_PORT` · `SMTP_USER` · `SMTP_PASSWORD` · `EMAIL_FROM` | | Order confirmations |
 | `STORE_NAME` · `STORE_STREET` · `STORE_CITY` · `STORE_STATE` · `STORE_ZIP` · `STORE_COUNTRY` · `STORE_PHONE` · `STORE_EMAIL` | | Ship-from address and contact details |

@@ -9,6 +9,7 @@ const PickupLocation = require('../models/PickupLocation');
 const mongoose = require('mongoose');
 const { inputError, readText, snapshotLocation } = require('../utils/fulfillment');
 const { sendOrderConfirmation } = require('../utils/email');
+const { RECAPTCHA_ACTIONS, verifyRecaptcha } = require('../utils/recaptcha');
 
 // Create Stripe Checkout Session
 exports.createCheckoutSession = async (req, res) => {
@@ -24,6 +25,10 @@ exports.createCheckoutSession = async (req, res) => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(checkoutEmail)) {
       throw inputError('Enter a valid email address');
     }
+    await verifyRecaptcha({
+      token: req.body.recaptchaToken,
+      expectedAction: RECAPTCHA_ACTIONS.checkout,
+    });
     let pickup;
     // Only accept a location ID from the customer; addresses and instructions
     // are copied from the active, admin-managed location on the server.

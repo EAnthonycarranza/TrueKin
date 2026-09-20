@@ -23,15 +23,20 @@ const locationId = new mongoose.Types.ObjectId();
 const productId = new mongoose.Types.ObjectId();
 const location = { _id: locationId, name: 'QA Studio', street: '123 Test St', city: 'Testville', state: 'TX', zip: '75001', country: 'US', hours: 'By appointment', instructions: 'Use the side door.', active: true };
 const pickupOrder = (extra = {}) => new Order({ totalAmount: 5000, items: [{ product: productId, title: 'Test tee', price: 2500, quantity: 2 }], fulfillmentMethod: 'pickup', paymentMethod: 'pay_on_pickup', pickup: { ...location, locationId, contactName: 'Alex', customerInstructions: 'Sam is collecting.' }, ...extra });
-const body = (extra = {}) => ({ items: [{ productId: productId.toString(), quantity: 2 }], fulfillmentMethod: 'pickup', paymentMethod: 'pay_on_pickup', guestEmail: 'alex+pickup@example.test', pickup: { locationId: locationId.toString(), contactName: 'Alex', customerInstructions: 'Sam is collecting.', instructions: 'UNTRUSTED' }, ...extra });
+const body = (extra = {}) => ({ items: [{ productId: productId.toString(), quantity: 2 }], fulfillmentMethod: 'pickup', paymentMethod: 'pay_on_pickup', guestEmail: 'alex+pickup@example.test', recaptchaToken: 'checkout-token', pickup: { locationId: locationId.toString(), contactName: 'Alex', customerInstructions: 'Sam is collecting.', instructions: 'UNTRUSTED' }, ...extra });
 const response = () => ({ code: 200, status(code) { this.code = code; return this; }, json(data) { this.data = data; return this; } });
 const query = (value) => ({ populate() { return this; }, select() { return this; }, lean() { return Promise.resolve(value); }, then(resolve, reject) { return Promise.resolve(value).then(resolve, reject); } });
 let created;
+let recaptchaResult;
 
 beforeEach(() => {
   process.env.STRIPE_SECRET_KEY = 'sk_test_fixture';
+  process.env.RECAPTCHA_SECRET_KEY = 'recaptcha-test-secret';
+  process.env.RECAPTCHA_MIN_SCORE = '0.5';
+  recaptchaResult = { success: true, score: 0.9, action: 'checkout_submit', hostname: 'localhost' };
   confirmation.mock.resetCalls(); readyMail.mock.resetCalls(); stripeCreate.mock.resetCalls();
   created = null;
+  mock.method(global, 'fetch', async () => ({ ok: true, status: 200, json: async () => recaptchaResult }));
   mock.method(PickupLocation, 'findOne', async () => location);
   mock.method(Product, 'findById', async () => ({ _id: productId, title: 'Test tee', price: 2500, imageUrls: [], sizes: [] }));
   mock.method(Order, 'create', async (data) => {
@@ -86,6 +91,21 @@ test('shipping cannot request payment at pickup', async () => {
   const res = response();
   await checkout.createCheckoutSession({ body: body({ fulfillmentMethod: 'shipping' }) }, res);
   assert.equal(res.code, 400);
+  assert.equal(created, null);
+});
+
+test('checkout requires a valid purchase reCAPTCHA result before inventory or order work', async () => {
+  const missing = response();
+  await checkout.createCheckoutSession({ body: body({ recaptchaToken: undefined }) }, missing);
+  assert.equal(missing.code, 400);
+  assert.match(missing.data.message, /verification/i);
+  assert.equal(Product.findById.mock.callCount(), 0);
+
+  recaptchaResult = { success: true, score: 0.2, action: 'checkout_submit', hostname: 'localhost' };
+  const suspicious = response();
+  await checkout.createCheckoutSession({ body: body() }, suspicious);
+  assert.equal(suspicious.code, 403);
+  assert.equal(Product.findById.mock.callCount(), 0);
   assert.equal(created, null);
 });
 
