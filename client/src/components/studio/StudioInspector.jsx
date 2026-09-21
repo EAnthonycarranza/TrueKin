@@ -26,7 +26,7 @@ function colorInputValue(fill) {
   return '#181818';
 }
 
-export default function StudioInspector({ selected, onUpdate, onCommand }) {
+export default function StudioInspector({ selected, onUpdate, onCommand, sidebar = false }) {
   const prefix = useId();
   if (!selected) return (
     <section className="us-inspector" aria-label="Artwork properties">
@@ -51,9 +51,9 @@ export default function StudioInspector({ selected, onUpdate, onCommand }) {
   );
 
   return (
-    <section className="us-inspector" aria-label="Selected artwork properties">
+    <section className={`us-inspector ${sidebar ? 'is-sidebar' : ''}`} aria-label="Selected artwork properties">
       <div className="us-field-row">
-        <strong>{text ? 'Text' : image ? 'Image' : selected.type === 'activeselection' ? 'Selected artwork' : 'Shape'} settings</strong>
+        {!sidebar && <strong>{text ? 'Text' : image ? 'Image' : selected.type === 'activeselection' ? 'Selected artwork' : 'Shape'} settings</strong>}
         <button type="button" className="us-button" aria-pressed={locked} title={locked ? 'Unlock this layer to move, resize, or edit it' : 'Keep this layer in place after aligning it'} onClick={() => onCommand('lock')}>
           {locked ? <UnlockKeyhole size={15} aria-hidden="true" /> : <LockKeyhole size={15} aria-hidden="true" />}
           {locked ? 'Unlock layer' : 'Lock layer'}

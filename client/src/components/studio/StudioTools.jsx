@@ -7,7 +7,7 @@ import { mockupSource } from './mockups';
 const CATEGORIES = CLIPART_CATEGORIES.filter(c => c.name !== 'Shapes');
 const ALL_ASSETS = CATEGORIES.flatMap(c => c.items.map(item => ({ ...item, category: c.name })));
 
-export default function StudioTools({ tool, productType, availableProductTypes = ['tshirt', 'hat', 'sticker'], color, onProductChange, onColorChange, onAddText, onAddImage, onAddShape, layers, selected, onCommand, onClose, busy }) {
+export default function StudioTools({ tool, productType, availableProductTypes = ['tshirt', 'hat', 'sticker'], color, onProductChange, onColorChange, onAddText, onAddImage, onAddShape, layers, selected, onCommand, onClose, busy, embedded = false }) {
   const [text, setText] = useState('STAND TRUE. STAY LOYAL.');
   const [font, setFont] = useState('Oswald');
   const [ink, setInk] = useState('#181818');
@@ -20,7 +20,7 @@ export default function StudioTools({ tool, productType, availableProductTypes =
   const titles = { product: 'Make it yours', text: 'Say it your way', uploads: 'Your artwork', assets: 'The asset library', shapes: 'Build with shapes', layers: 'Your layers' };
 
   return <>
-    <div className="us-panel-heading"><div><span className="us-eyebrow">CREATIVE TOOLKIT</span><h3>{titles[tool]}</h3></div><button type="button" className="us-icon-button us-mobile-only" aria-label="Close toolkit" onClick={onClose}><X size={18} /></button></div>
+    {!embedded && <div className="us-panel-heading"><div><span className="us-eyebrow">CREATIVE TOOLKIT</span><h3>{titles[tool]}</h3></div><button type="button" className="us-icon-button us-mobile-only" aria-label="Close toolkit" onClick={onClose}><X size={18} /></button></div>}
     {tool === 'product' && <>
       <p className="us-muted">Choose your canvas. Each product keeps its own artwork while you explore.</p>
       <div className="us-product-options">{[['tshirt', 'T-shirt', 'Front, back & sleeves'], ['sticker', 'Sticker', 'Durable full-color face'], ['hat', 'Baseball hat', 'Signature front panel']].filter(([id]) => availableProductTypes.includes(id)).map(([id, label, sub]) => <button type="button" key={id} className={`us-product-option ${productType === id ? 'is-active' : ''}`} aria-pressed={productType === id} disabled={busy} onClick={() => onProductChange(id)}>

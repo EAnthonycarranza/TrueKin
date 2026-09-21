@@ -69,14 +69,16 @@ export default function UnifiedStudio({ designData, productType, onProductTypeCh
   const [dirty, setDirty] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [draft, setDraft] = useState(() => readDraft(draftKey, start.document.productType));
-  const studioRoot = useRef(null), canvasRef = useRef(null), viewerRef = useRef(null), importRef = useRef(null), menuRef = useRef(null);
+  const studioRoot = useRef(null), toolPanelRef = useRef(null), canvasRef = useRef(null), viewerRef = useRef(null), importRef = useRef(null), menuRef = useRef(null);
   const documents = useRef({ [start.document.productType]: start.document });
   const latestDocument = useRef(start.document);
   const draftTimer = useRef(null), revision = useRef(0), dirtyRef = useRef(false);
   const previousPanelOpen = useRef(false);
+  const activeTextId = useRef(null);
   const phone = usePhoneLayout(studioRoot);
   const previousPhone = useRef(phone);
   const type = initialDocument.productType;
+  const textSettingsInPanel = compactTools && tool === 'text' && state.selected?.type === 'text';
   const productOptions = [...new Set([...availableProductTypes, type])];
   const displayMode = phone && mode === 'split' ? '2d' : mode;
   const disabled = !!busy || saving || state.loading || state.error;
@@ -90,18 +92,22 @@ export default function UnifiedStudio({ designData, productType, onProductTypeCh
   }, [phone]);
 
   useEffect(() => {
+    if (panelOpen && textSettingsInPanel && toolPanelRef.current) toolPanelRef.current.scrollTop = 0;
+  }, [panelOpen, textSettingsInPanel, state.selected?.id]);
+
+  useEffect(() => {
     const closedPanel = previousPanelOpen.current && !panelOpen;
     previousPanelOpen.current = panelOpen;
     if (!phone || (!panelOpen && !closedPanel)) return;
     // Keep mobile tools and the resulting artwork in view without requiring
     // a hunt below the canvas after every add/close action.
     const frame = requestAnimationFrame(() => {
-      studioRoot.current?.querySelector(panelOpen ? '.us-tool-panel' : '.us-workspace')?.scrollIntoView({
+      studioRoot.current?.querySelector(textSettingsInPanel && panelOpen ? '.us-edit-stage' : panelOpen ? '.us-tool-panel' : '.us-workspace')?.scrollIntoView({
         block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
       });
     });
     return () => cancelAnimationFrame(frame);
-  }, [phone, panelOpen, tool]);
+  }, [phone, panelOpen, tool, textSettingsInPanel]);
 
   const persistDraft = useCallback(doc => {
     try {
@@ -113,6 +119,12 @@ export default function UnifiedStudio({ designData, productType, onProductTypeCh
 
   const handleChange = useCallback(next => {
     latestDocument.current = next.document;
+    const textId = next.selected?.type === 'text' ? next.selected.id : null;
+    if (compactTools && textId && textId !== activeTextId.current) {
+      setTool('text');
+      setPanelOpen(true);
+    }
+    activeTextId.current = textId;
     setState(next);
     if (!next.changed) return;
     onDesignChange?.();
@@ -124,7 +136,7 @@ export default function UnifiedStudio({ designData, productType, onProductTypeCh
       const e = canvasRef.current?.getEngine();
       if (e && !e.disposed) persistDraft(e.getDocument());
     }, 650);
-  }, [persistDraft, onDesignChange]);
+  }, [compactTools, persistDraft, onDesignChange]);
 
   useEffect(() => () => {
     clearTimeout(draftTimer.current);
@@ -224,7 +236,7 @@ export default function UnifiedStudio({ designData, productType, onProductTypeCh
   const addText = (text, font, ink) => run('Adding text', async () => {
     await document.fonts.load(`bold 72px "${font}"`);
     engine().addText(text, font, ink);
-    if (phone) setPanelOpen(false);
+    if (phone && !compactTools) setPanelOpen(false);
     if (displayMode === '3d') setMode('2d');
   });
 
@@ -295,6 +307,13 @@ export default function UnifiedStudio({ designData, productType, onProductTypeCh
   });
 
   const selectTool = id => { setTool(id); setPanelOpen(tool === id ? !panelOpen : true); };
+  const studioToolsProps = {
+    tool, productType: type, availableProductTypes: productOptions, color,
+    onProductChange: value => { if (onProductTypeChange?.(value) !== false) switchProduct(value); },
+    onColorChange: value => engine()?.setColor(value), onAddText: addText, onAddImage: addImage,
+    onAddShape: (shape, ink) => { engine()?.addDefinedShape(shape, ink); if (phone) setPanelOpen(false); if (displayMode === '3d') setMode('2d'); },
+    layers: state.layers, selected: state.selected, onCommand: command, onClose: () => setPanelOpen(false), busy: disabled,
+  };
 
   return <section ref={studioRoot} className="us-studio" aria-label="Truekin design studio" aria-busy={!!busy || saving}>
     <header className="us-header">
@@ -315,13 +334,20 @@ export default function UnifiedStudio({ designData, productType, onProductTypeCh
     </header>
     {notice && <div className={`us-notice is-${notice.kind}`} role={notice.kind === 'error' ? 'alert' : 'status'}><span>{notice.text}</span>{state.error && <button type="button" className="us-button" disabled={state.loading} onClick={() => { setView('front'); engine()?.retry(); }}>Retry artwork</button>}<button type="button" className="us-icon-button" aria-label="Dismiss message" disabled={state.error} onClick={() => setNotice(null)}><X size={15} /></button></div>}
     {draft && <div className="us-draft-banner"><div><strong>A device draft is available</strong><span>{new Date(draft.updatedAt).toLocaleString()} · {productName(type)}</span></div><button type="button" className="us-button" disabled={disabled} onClick={() => { const doc = normalizeDocument(draft.document); replaceDocument(doc); setDraft(null); setDirty(true); dirtyRef.current = true; setStatus('Device draft restored'); }}>Restore</button><button type="button" className="us-icon-button" aria-label="Dismiss available draft" onClick={() => setDraft(null)}><X size={16} /></button></div>}
-    <div className={`us-body ${panelOpen ? 'has-mobile-panel' : 'is-panel-collapsed'}`}>
+    <div className={`us-body ${panelOpen ? 'has-mobile-panel' : 'is-panel-collapsed'} ${textSettingsInPanel ? 'has-text-settings' : ''}`}>
       <nav className="us-tool-rail" aria-label="Design tools">{TOOLS.map(([id, Icon, label]) => <button type="button" key={id} className={tool === id && panelOpen ? 'is-active' : ''} aria-pressed={tool === id && panelOpen} aria-controls="studio-toolkit" aria-expanded={panelOpen && tool === id} onClick={() => selectTool(id)}>{createElement(Icon, { size: 21 })}<span>{label}</span></button>)}</nav>
-      <aside className="us-tool-panel" id="studio-toolkit"><StudioTools tool={tool} productType={type} availableProductTypes={productOptions} color={color} onProductChange={value => { if (onProductTypeChange?.(value) !== false) switchProduct(value); }} onColorChange={value => engine()?.setColor(value)} onAddText={addText} onAddImage={addImage} onAddShape={(shape, ink) => { engine()?.addDefinedShape(shape, ink); if (phone) setPanelOpen(false); if (displayMode === '3d') setMode('2d'); }} layers={state.layers} selected={state.selected} onCommand={command} onClose={() => setPanelOpen(false)} busy={disabled} /></aside>
+      <aside ref={toolPanelRef} className={`us-tool-panel ${textSettingsInPanel ? 'us-text-sidebar' : ''}`} id="studio-toolkit" aria-label={textSettingsInPanel ? 'Text settings' : 'Design tools'}>
+        {textSettingsInPanel ? <>
+          <div className="us-panel-heading"><div><span className="us-eyebrow">SELECTED ARTWORK</span><h3>Text settings</h3></div><button type="button" className="us-icon-button us-mobile-only" aria-label="Close text settings" onClick={() => setPanelOpen(false)}><X size={18} /></button></div>
+          <p className="us-muted">Changes appear on your canvas as you make them.</p>
+          <StudioInspector selected={state.selected} onUpdate={update} onCommand={command} sidebar />
+          <details className="us-add-text" key={state.selected.id}><summary><Plus size={15} aria-hidden="true" /> Add another text layer</summary><div className="us-add-text-content"><StudioTools {...studioToolsProps} embedded /></div></details>
+        </> : <StudioTools {...studioToolsProps} />}
+      </aside>
       <div className="us-workspace">
         <div className="us-workspace-bar"><button type="button" className="us-tool-toggle" aria-controls="studio-toolkit" aria-expanded={panelOpen} onClick={() => setPanelOpen((open) => !open)}>{panelOpen ? <PanelLeftClose size={15} /> : <PanelLeftOpen size={15} />}{panelOpen ? 'Hide tools' : 'Show tools'}</button><div className="us-surfaces" aria-label="Print location">{SURFACES[type].map(s => <button type="button" key={s.id} disabled={disabled} aria-pressed={view === s.id} className={view === s.id ? 'is-active' : ''} onClick={() => { setView(s.id); setAutoRotate(false); }}>{s.label}</button>)}</div><div className="us-view-modes" aria-label="Studio view">{[['2d', MousePointer2, 'Edit'], ['split', PanelLeftClose, 'Split'], ['3d', Box, '3D']].filter(([id]) => !phone || id !== 'split').map(([id, Icon, label]) => <button type="button" key={id} onClick={() => setMode(id)} aria-pressed={displayMode === id} className={displayMode === id ? 'is-active' : ''}>{createElement(Icon, { size: 15 })}<span>{label}</span></button>)}</div></div>
         <div className={`us-stages is-${displayMode}`}>
-          <div className={`us-stage us-edit-stage ${displayMode === '3d' ? 'is-hidden' : ''}`} aria-hidden={displayMode === '3d'}><div className="us-stage-label"><span><MousePointer2 size={12} /> EDIT YOUR DESIGN</span><span>{type === 'tshirt' ? 'Classic tee' : productName(type)}</span></div><SelectionToolbar key={state.selected?.id || 'none'} selected={state.selected} disabled={disabled} onCommand={command} /><div className="us-canvas-wrap"><StudioCanvas ref={canvasRef} initialDocument={initialDocument} view={view} color={color} guides={guides} snap={snap} onChange={handleChange} onError={reportError} /></div><p className="us-stage-caption">Tap to select · drag to move · use handles to resize</p></div>
+          <div className={`us-stage us-edit-stage ${displayMode === '3d' ? 'is-hidden' : ''}`} aria-hidden={displayMode === '3d'}><div className="us-stage-label"><span><MousePointer2 size={12} /> EDIT YOUR DESIGN</span><span>{type === 'tshirt' ? 'Classic tee' : productName(type)}</span></div><SelectionToolbar key={state.selected?.id || 'none'} selected={state.selected} disabled={disabled} onCommand={command} onEditText={compactTools ? () => { setTool('text'); setPanelOpen(true); } : undefined} /><div className="us-canvas-wrap"><StudioCanvas ref={canvasRef} initialDocument={initialDocument} view={view} color={color} guides={guides} snap={snap} onChange={handleChange} onError={reportError} /></div><p className="us-stage-caption">Tap to select · drag to move · use handles to resize</p></div>
           {displayMode !== '2d' && <div className="us-stage us-3d-stage"><div className="us-stage-label"><span><Box size={12} /> LIVE PREVIEW</span><span className="us-live-dot">Synced</span></div><div className="us-viewer-wrap"><Suspense fallback={<div className="us-viewer-loading"><LoaderCircle size={22} className="us-spin" />Loading 3D preview…</div>}><ProductViewer ref={viewerRef} productType={type} color={color} prints={state.document.prints} view={view} autoRotate={autoRotate} /></Suspense></div><p className="us-stage-caption">Drag to rotate · pinch or scroll to zoom</p></div>}
           {(!!busy || state.loading) && <div className="us-busy" role="status"><LoaderCircle size={16} className="us-spin" />{busy || 'Preparing your design'}</div>}
         </div>
@@ -331,7 +357,7 @@ export default function UnifiedStudio({ designData, productType, onProductTypeCh
         {!state.layers.length && !state.loading && <div className="us-start-hint"><span>Good things start with a blank canvas.</span><button type="button" onClick={() => { setTool('text'); setPanelOpen(true); }}><Plus size={14} /> Add text</button><button type="button" onClick={() => { setTool('assets'); setPanelOpen(true); }}>Explore artwork →</button></div>}
       </div>
     </div>
-    {state.selected && <div className="us-selection"><StudioInspector selected={state.selected} onUpdate={update} onCommand={command} /></div>}
+    {state.selected && !(compactTools && state.selected.type === 'text') && <div className="us-selection"><StudioInspector selected={state.selected} onUpdate={update} onCommand={command} /></div>}
     <footer className="us-bottom-bar"><span><span className="us-status-dot" />{phone ? status : 'ONE DESIGN. EVERY ANGLE.'}</span><span>Keep artwork inside the print guide<span className="us-desktop-only"> · Colors are a visual approximation</span></span></footer>
   </section>;
 }

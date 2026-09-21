@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   AlignCenterHorizontal, AlignCenterVertical, ArrowDownToLine, ArrowUpToLine,
-  Copy, Ellipsis, FlipHorizontal2, LockKeyhole, Trash2, UnlockKeyhole, X,
+  Copy, Ellipsis, FlipHorizontal2, LockKeyhole, Trash2, Type, UnlockKeyhole, X,
 } from 'lucide-react';
 
-export default function SelectionToolbar({ selected, disabled, onCommand }) {
+export default function SelectionToolbar({ selected, disabled, onCommand, onEditText }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -33,6 +33,7 @@ export default function SelectionToolbar({ selected, disabled, onCommand }) {
 
   return <div className="us-selection-toolbar" role="toolbar" aria-label="Selected artwork actions">
     <span className="us-selection-toolbar-label">{label}</span>
+    {selected.type === 'text' && onEditText && <button type="button" className="us-edit-text" aria-label="Open text settings" title="Edit text settings" onClick={onEditText}><Type size={16} aria-hidden="true" /> Edit text</button>}
     {icon(selected.locked ? 'Unlock layer' : 'Lock layer', selected.locked ? UnlockKeyhole : LockKeyhole, 'lock', undefined, disabled)}
     {icon('Duplicate artwork', Copy, 'duplicate')}
     {icon('Delete artwork', Trash2, 'delete')}
