@@ -80,8 +80,12 @@ exports.createQuote = async (req, res) => {
     if (!name || !email || !quantity || !details) {
       throw requestError('Name, email, quantity, and project details are required.');
     }
-    const qty = parseInt(quantity, 10);
-    if (!Number.isFinite(qty) || qty < 1 || qty > 100000) {
+    const customerEmail = text(email, 200).toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
+      throw requestError('Enter a valid email address so we can send your quote.');
+    }
+    const qty = Number(quantity);
+    if ((typeof quantity === 'string' && !/^\d+$/.test(quantity.trim())) || !Number.isInteger(qty) || qty < 1 || qty > 100000) {
       throw requestError('Quantity must be from 1 to 100,000.');
     }
 
@@ -112,7 +116,7 @@ exports.createQuote = async (req, res) => {
       requestType,
       productType,
       name: text(name, 120),
-      email: text(email, 200).toLowerCase(),
+      email: customerEmail,
       phone: text(phone, 40),
       organization: text(organization, 160),
       quantity: qty,

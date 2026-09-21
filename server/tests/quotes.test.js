@@ -51,6 +51,26 @@ test('a verified quote action creates the inquiry', async () => {
   assert.equal(created.requestType, 'basic');
 });
 
+test('quote requests require a validly formatted email address before verification or storage', async () => {
+  const res = response();
+  await quotes.createQuote({ body: body({ email: 'not-an-email' }), ip: '127.0.0.1' }, res);
+  assert.equal(res.code, 400);
+  assert.match(res.data.message, /valid email address/i);
+  assert.equal(created, null);
+  assert.equal(global.fetch.mock.callCount(), 0);
+});
+
+test('quote quantities must be whole numbers rather than parseable prefixes', async () => {
+  for (const quantity of ['24shirts', '2.5', '1e3']) {
+    const res = response();
+    await quotes.createQuote({ body: body({ quantity }), ip: '127.0.0.1' }, res);
+    assert.equal(res.code, 400);
+    assert.match(res.data.message, /quantity/i);
+  }
+  assert.equal(created, null);
+  assert.equal(global.fetch.mock.callCount(), 0);
+});
+
 test('studio quote recalculates the estimate and stores editable art with a durable preview', async () => {
   const png = await sharp({ create: { width: 24, height: 24, channels: 4, background: '#446343' } }).png().toBuffer();
   mock.method(SiteSettings, 'findOne', () => ({ select: async () => ({ studioTools: { stickerEnabled: true } }) }));
