@@ -414,10 +414,16 @@ exports.sendQuoteProposal = async function sendQuoteProposal(quote) {
   `);
   const rows = [];
   for (let i = 0; i < conceptImages.length; i += 2) rows.push(`<tr>${conceptImages[i]}${conceptImages[i + 1] || '<td></td>'}</tr>`);
+  const productPreview = proposal.productPreview?.imageUrl ? proposal.productPreview : null;
+  const productBlock = productPreview ? `
+    ${label('Proposed product')}
+    ${panel(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td width="35%" style="vertical-align:top;padding-right:14px;"><img src="${escapeHtml(imageUrl(productPreview.imageUrl))}" alt="${escapeHtml(productPreview.title || 'Proposed product')}" width="190" style="display:block;width:100%;height:auto;max-width:190px;background:${C.wash};border:1px solid ${C.line};" /></td><td style="vertical-align:top;font-family:${SANS};color:${C.body};font-size:12px;line-height:1.6;"><strong style="color:${C.ink};font-size:15px;">${escapeHtml(productPreview.title || 'Custom product')}</strong><br/>${escapeHtml(productPreview.description || '').replace(/\n/g, '<br/>')}${quote.quantity ? `<br/><br/>Requested quantity: ${Number(quote.quantity).toLocaleString()}` : ''}</td></tr></table>`, { background: C.card })}
+  ` : '';
 
   const body = `
     ${headline({ chip: 'Custom quote', title: 'Let&rsquo;s make', accentTitle: 'something true.', lead: `Hi ${escapeHtml(quote.name)}, here&rsquo;s your Truekin quote and artwork brief. Review the details below, then reply to this email with any changes or approval.` })}
     ${panel(`<div style="font-family:${MONO};font-size:13px;color:${C.muted};">${escapeHtml(reference)}</div><div style="font-family:${SANS};font-size:12px;color:${C.body};margin-top:8px;">Valid through ${escapeHtml(proposal.validUntil || 'confirmation with Truekin')}</div>`)}
+    ${productBlock}
     ${rows.length ? `${label('Design concepts')}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">${rows.join('')}</table>` : ''}
     ${label('Project pricing')}
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">${itemRows}</table>
@@ -432,6 +438,9 @@ exports.sendQuoteProposal = async function sendQuoteProposal(quote) {
     '',
     `Truekin custom quote ${reference}`,
     `Valid through ${proposal.validUntil || 'confirmation with Truekin'}`,
+    productPreview ? `Proposed product: ${productPreview.title}` : null,
+    productPreview?.description || null,
+    productPreview && quote.quantity ? `Requested quantity: ${quote.quantity}` : null,
     '',
     'PROJECT PRICING',
     ...proposal.lineItems.map((item) => `${item.description} — ${item.quantity} x ${money(item.unitPrice)} = ${money(item.quantity * item.unitPrice)}`),

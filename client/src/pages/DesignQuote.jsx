@@ -1,5 +1,5 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Calculator, Check, Clock3, FileCheck2, ShieldCheck, Sticker, Shirt, Sparkles } from 'lucide-react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { ArrowLeft, ArrowRight, Check, Clock3, FileCheck2, Sticker, Shirt, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { api } from '../api/client';
@@ -9,25 +9,16 @@ import { executeRecaptcha, RECAPTCHA_ACTIONS } from '../utils/recaptcha';
 
 const UnifiedStudio = lazy(() => import('../components/studio/UnifiedStudio'));
 const EMPTY_CUSTOMER = { name: '', email: '', phone: '', organization: '', neededBy: '', details: '' };
-const money = (cents) => `$${(Number(cents || 0) / 100).toFixed(2)}`;
 
 export default function DesignQuote() {
   const [productType, setProductType] = useState('tshirt');
   const [stickerEnabled, setStickerEnabled] = useState(true);
   const [customer, setCustomer] = useState(EMPTY_CUSTOMER);
   const [specs, setSpecs] = useState({ quantity: 24, printLocations: 1, stickerSize: '3in', rush: false });
-  const [estimate, setEstimate] = useState(null);
-  const [estimateBusy, setEstimateBusy] = useState(false);
-  const [estimateError, setEstimateError] = useState(false);
   const [attached, setAttached] = useState(null);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [sentEmail, setSentEmail] = useState('');
-  const latestEstimate = useRef(0);
-  const estimateCurrent = estimate?.productType === productType
-    && estimate?.quantity === Number(specs.quantity)
-    && estimate?.rushRequested === specs.rush
-    && (productType === 'sticker' ? estimate?.stickerSize === specs.stickerSize : estimate?.printLocations === specs.printLocations);
   const studioProducts = stickerEnabled ? ['tshirt', 'sticker'] : ['tshirt'];
 
   useEffect(() => {
@@ -39,25 +30,6 @@ export default function DesignQuote() {
   useEffect(() => () => {
     if (attached?.preview) URL.revokeObjectURL(attached.preview);
   }, [attached]);
-
-  useEffect(() => {
-    const quantity = Number(specs.quantity);
-    if (!Number.isInteger(quantity) || quantity < 1) return undefined;
-    const request = ++latestEstimate.current;
-    const timer = setTimeout(async () => {
-      setEstimateBusy(true);
-      setEstimateError(false);
-      try {
-        const data = await api.getQuoteEstimate({ ...specs, productType, quantity });
-        if (request === latestEstimate.current) setEstimate(data.estimate);
-      } catch {
-        if (request === latestEstimate.current) { setEstimate(null); setEstimateError(true); }
-      } finally {
-        if (request === latestEstimate.current) setEstimateBusy(false);
-      }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [productType, specs]);
 
   const changeProduct = (nextType) => {
     if (nextType === productType) return true;
@@ -114,7 +86,7 @@ export default function DesignQuote() {
 
   return (
     <main className="dq-page">
-      <section className="dq-hero"><div className="container"><Link to="/quote" className="dq-back"><ArrowLeft size={14} /> All quote options</Link><p className="dq-kicker">Truekin self-design quote</p><h1>Build the proof.<br /><span>See the estimate.</span></h1><p className="dq-hero-copy">Upload your own artwork, place it on a T-shirt or sticker, and send a production-ready concept. It gives our team more detail up front—the fastest route to a precise response.</p><div className="dq-benefits"><span><Calculator size={16} /> Live starting estimate</span><span><Sparkles size={16} /> Editable 2D + 3D studio</span><span><Clock3 size={16} /> Faster review brief</span></div></div></section>
+      <section className="dq-hero"><div className="container"><Link to="/quote" className="dq-back"><ArrowLeft size={14} /> All quote options</Link><p className="dq-kicker">Truekin self-design quote</p><h1>Build the proof.<br /><span>Get a personal quote.</span></h1><p className="dq-hero-copy">Upload your own artwork, place it on a T-shirt or sticker, and send a production-ready concept. An admin reviews the details, builds your quote, and emails it to you. A finished design helps us respond faster.</p><div className="dq-benefits"><span><Sparkles size={16} /> Editable 2D + 3D studio</span><span><Clock3 size={16} /> Faster review brief</span></div></div></section>
 
       <form onSubmit={submit} className="container dq-form">
         <section className="dq-spec card">
@@ -127,13 +99,12 @@ export default function DesignQuote() {
             <label>Quantity<input type="number" min="1" max="100000" value={specs.quantity} onChange={(event) => setSpecs((current) => ({ ...current, quantity: event.target.value }))} /></label>
             {productType === 'tshirt' ? <label>Print locations<select value={specs.printLocations} onChange={(event) => setSpecs((current) => ({ ...current, printLocations: Number(event.target.value) }))}><option value="1">1 location</option><option value="2">2 locations</option><option value="3">3 locations</option><option value="4">4 locations</option></select></label> : <label>Finished size<select value={specs.stickerSize} onChange={(event) => setSpecs((current) => ({ ...current, stickerSize: event.target.value }))}><option value="2in">2 inch</option><option value="3in">3 inch</option><option value="4in">4 inch</option></select></label>}
           </div>
-          <label className="dq-rush"><input type="checkbox" checked={specs.rush} onChange={(event) => setSpecs((current) => ({ ...current, rush: event.target.checked }))} /><span><strong>Ask us to review rush timing</strong><small>Adds a provisional rush allowance; final availability is confirmed by Truekin.</small></span></label>
-          <div className="dq-estimate" aria-live="polite"><div><span>Starting estimate</span>{estimateCurrent && !estimateBusy ? <strong>{money(estimate.low)}–{money(estimate.high)}</strong> : estimateError && !estimateBusy ? <strong>Estimate unavailable</strong> : Number.isInteger(Number(specs.quantity)) && Number(specs.quantity) > 0 && Number(specs.quantity) <= 100000 ? <strong>Calculating…</strong> : <strong>Enter a valid quantity</strong>}<small>{estimateCurrent ? `${money(estimate.unitPrice)} estimated per piece + ${money(estimate.setup)} setup` : 'Final pricing follows artwork and material review.'}</small></div><ShieldCheck size={24} /><p>This is a planning estimate, not an invoice. Specialty finishes, exact blanks, tax, and delivery can change the final quote.</p></div>
+          <label className="dq-rush"><input type="checkbox" checked={specs.rush} onChange={(event) => setSpecs((current) => ({ ...current, rush: event.target.checked }))} /><span><strong>Ask us to review rush timing</strong><small>Truekin will confirm availability and pricing in the emailed quote.</small></span></label>
         </section>
 
         <section className="dq-studio-section"><header className="dq-section-title"><span>02</span><div><h2>Make the concept</h2><p>Import artwork, add text, and inspect a synced 3D model. When it looks right, attach it to the quote. Reattach after further edits.</p></div>{attached && <span className="dq-attached"><FileCheck2 size={14} /> Attached</span>}</header><Suspense fallback={<div className="dq-studio-loading"><div className="spinner" /> Loading design studio…</div>}><UnifiedStudio productType={productType} onProductTypeChange={changeProduct} onDesignChange={clearAttachedDesign} availableProductTypes={studioProducts} draftKey="customer-quote" onSave={attachDesign} saveLabel="Attach to quote" /></Suspense></section>
 
-        <section className="dq-contact card"><header><span>03</span><div><h2>Send your production brief</h2><p>We’ll reply by email with the confirmed quote.</p></div></header><div className="dq-fields"><label>Name <em>*</em><input required maxLength="120" value={customer.name} onChange={(event) => setCustomer((current) => ({ ...current, name: event.target.value }))} placeholder="Your name" /></label><label>Email <em>*</em><input type="email" required maxLength="200" value={customer.email} onChange={(event) => setCustomer((current) => ({ ...current, email: event.target.value }))} placeholder="you@example.com" /></label><label>Phone<input maxLength="40" value={customer.phone} onChange={(event) => setCustomer((current) => ({ ...current, phone: event.target.value }))} placeholder="Optional" /></label><label>Organization<input maxLength="160" value={customer.organization} onChange={(event) => setCustomer((current) => ({ ...current, organization: event.target.value }))} placeholder="Church, team, company…" /></label><label>Needed by<input maxLength="80" value={customer.neededBy} onChange={(event) => setCustomer((current) => ({ ...current, neededBy: event.target.value }))} placeholder="Date or event" /></label></div><label>Project notes <em>*</em><textarea required rows="5" maxLength="4000" value={customer.details} onChange={(event) => setCustomer((current) => ({ ...current, details: event.target.value }))} placeholder="Tell us about materials, sizes, finish, audience, budget, or anything the design does not show." /></label>{attached && <div className="dq-proof"><img src={attached.preview} alt="Attached design proof" /><div><strong>Studio proof attached</strong><span>{productType === 'sticker' ? 'Sticker' : 'T-shirt'} · {Number(specs.quantity || 0).toLocaleString()} pieces</span></div></div>}<button type="submit" className="btn btn-primary btn-lg dq-submit" disabled={sending}>{sending ? 'Verifying & sending…' : 'Send Studio Quote'} <ArrowRight size={16} /></button><p className="dq-fine">This sends your editable studio design, preview, estimate assumptions, and contact details to Truekin. {BRAND_SLOGAN}</p><RecaptchaNotice /></section>
+        <section className="dq-contact card"><header><span>03</span><div><h2>Send your production brief</h2><p>An admin will review it and email your custom quote.</p></div></header><div className="dq-fields"><label>Name <em>*</em><input required maxLength="120" value={customer.name} onChange={(event) => setCustomer((current) => ({ ...current, name: event.target.value }))} placeholder="Your name" /></label><label>Email <em>*</em><input type="email" required maxLength="200" value={customer.email} onChange={(event) => setCustomer((current) => ({ ...current, email: event.target.value }))} placeholder="you@example.com" /></label><label>Phone<input maxLength="40" value={customer.phone} onChange={(event) => setCustomer((current) => ({ ...current, phone: event.target.value }))} placeholder="Optional" /></label><label>Organization<input maxLength="160" value={customer.organization} onChange={(event) => setCustomer((current) => ({ ...current, organization: event.target.value }))} placeholder="Church, team, company…" /></label><label>Needed by<input maxLength="80" value={customer.neededBy} onChange={(event) => setCustomer((current) => ({ ...current, neededBy: event.target.value }))} placeholder="Date or event" /></label></div><label>Project notes <em>*</em><textarea required rows="5" maxLength="4000" value={customer.details} onChange={(event) => setCustomer((current) => ({ ...current, details: event.target.value }))} placeholder="Tell us about materials, sizes, finish, audience, budget, or anything the design does not show." /></label>{attached && <div className="dq-proof"><img src={attached.preview} alt="Attached design proof" /><div><strong>Studio proof attached</strong><span>{productType === 'sticker' ? 'Sticker' : 'T-shirt'} · {Number(specs.quantity || 0).toLocaleString()} pieces</span></div></div>}<button type="submit" className="btn btn-primary btn-lg dq-submit" disabled={sending}>{sending ? 'Verifying & sending…' : 'Send Studio Quote'} <ArrowRight size={16} /></button><p className="dq-fine">This sends your editable studio design, preview, project details, and contact information to Truekin. No pricing is shown until an admin sends your quote. {BRAND_SLOGAN}</p><RecaptchaNotice /></section>
       </form>
       <section className="dq-quick"><div><p className="dq-kicker">Prefer a conversation first?</p><h2>Use the quick quote instead.</h2><p>Describe the idea in a few lines and Truekin will follow up by email. No design work required.</p></div><Link to="/quote#quote-form" className="btn btn-secondary">Open quick request <ArrowRight size={15} /></Link></section>
       <style>{`

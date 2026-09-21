@@ -1,8 +1,9 @@
 const sharp = require('sharp');
+const mongoose = require('mongoose');
 const Quote = require('../models/Quote');
+const Product = require('../models/Product');
 const SiteSettings = require('../models/SiteSettings');
 const storage = require('../utils/storage');
-const { quoteEstimate } = require('../utils/quotePricing');
 const { RECAPTCHA_ACTIONS, verifyRecaptcha } = require('../utils/recaptcha');
 const email = require('../utils/email');
 
@@ -63,15 +64,6 @@ async function storeQuoteImage(file, prefix) {
   return storage.saveImage(name, buffer, 'image/png');
 }
 
-exports.getEstimate = async (req, res) => {
-  try {
-    await ensureStudioProductEnabled(req.body.productType);
-    res.json({ estimate: quoteEstimate(req.body) });
-  } catch (error) {
-    res.status(error.status || 500).json({ message: error.message });
-  }
-};
-
 exports.createQuote = async (req, res) => {
   let storedPreview = '';
   try {
@@ -94,7 +86,6 @@ exports.createQuote = async (req, res) => {
     let productType = 'other';
     let designData = null;
     let specifications;
-    let estimate;
     if (requestType === 'studio') {
       productType = ['tshirt', 'sticker'].includes(req.body.productType) ? req.body.productType : '';
       if (!productType) throw requestError('Choose a T-shirt or sticker for your studio quote.');
@@ -102,13 +93,22 @@ exports.createQuote = async (req, res) => {
       designData = validateStudioDesign(req.body.designData, productType);
       if (!req.file) throw requestError('Attach a studio preview before submitting this quote.');
       const sourceSpecifications = parseJson(req.body.specifications, 'The quote specifications', {});
-      const calculated = quoteEstimate({ ...sourceSpecifications, productType, quantity: qty });
+      if (!sourceSpecifications || typeof sourceSpecifications !== 'object' || Array.isArray(sourceSpecifications)) {
+        throw requestError('The quote specifications must be an object.');
+      }
+      const printLocations = Number(sourceSpecifications.printLocations || 1);
+      if (productType === 'tshirt' && (!Number.isInteger(printLocations) || printLocations < 1 || printLocations > 4)) {
+        throw requestError('Print locations must be from 1 to 4.');
+      }
+      const stickerSize = sourceSpecifications.stickerSize || '3in';
+      if (productType === 'sticker' && !['2in', '3in', '4in'].includes(stickerSize)) {
+        throw requestError('Choose a valid sticker size.');
+      }
       specifications = {
-        printLocations: calculated.printLocations,
-        stickerSize: calculated.stickerSize,
-        rush: calculated.rushRequested,
+        printLocations: productType === 'tshirt' ? printLocations : 1,
+        stickerSize: productType === 'sticker' ? stickerSize : '',
+        rush: sourceSpecifications.rush === true || sourceSpecifications.rush === 'true',
       };
-      estimate = calculated;
       storedPreview = await storeQuoteImage(req.file, 'quote-design');
     }
 
@@ -125,12 +125,11 @@ exports.createQuote = async (req, res) => {
       designData,
       designPreviewUrl: storedPreview,
       specifications,
-      estimate,
     });
 
     res.status(201).json({
       message: requestType === 'studio'
-        ? "Design received — your estimate and production-ready brief are with Truekin. We'll reply within 1 business day."
+        ? "Design received — your production-ready brief is with Truekin. An admin will email your custom quote within 1 business day."
         : "Thanks — we'll reply with a custom quote within 1 business day.",
       quote: { id: quote._id, createdAt: quote.createdAt },
     });
@@ -204,6 +203,43 @@ exports.adminSaveQuoteBuilder = async (req, res) => {
     const tax = Math.round(taxable * taxRate / 100);
     const total = taxable + tax;
 
+    const requestedPreview = payload.productPreview;
+    const productImageFile = req.files?.productImage?.[0];
+    let productPreview;
+    if (requestedPreview?.sourceProductId) {
+      if (productImageFile) throw requestError('Choose a catalog product or upload a custom preview, not both.');
+      if (!mongoose.isValidObjectId(requestedPreview.sourceProductId)) throw requestError('Choose a valid catalog product.');
+      const product = await Product.findById(requestedPreview.sourceProductId);
+      if (!product) throw requestError('The selected catalog product no longer exists.');
+      if (!product.imageUrls?.[0]) throw requestError('The selected catalog product needs an image before it can be previewed.');
+      productPreview = {
+        sourceProductId: product._id,
+        title: text(requestedPreview.title || product.title, 160),
+        description: text(requestedPreview.description || product.description, 700),
+        imageUrl: product.imageUrls[0],
+      };
+    } else if (productImageFile) {
+      const imageUrl = await storeQuoteImage(productImageFile, `quote-product-${quote._id}`);
+      newImages.push(imageUrl);
+      productPreview = {
+        title: text(requestedPreview?.title, 160),
+        description: text(requestedPreview?.description, 700),
+        imageUrl,
+      };
+      if (!productPreview.title) throw requestError('Name the custom product preview.');
+    } else if (requestedPreview?.imageUrl) {
+      const current = quote.adminQuote?.productPreview;
+      if (current?.sourceProductId || current?.imageUrl !== requestedPreview.imageUrl) {
+        throw requestError('Upload a custom preview image through this quote.');
+      }
+      productPreview = {
+        title: text(requestedPreview.title, 160),
+        description: text(requestedPreview.description, 700),
+        imageUrl: current.imageUrl,
+      };
+      if (!productPreview.title) throw requestError('Name the custom product preview.');
+    }
+
     const currentImages = new Set((quote.adminQuote?.concepts || []).map((concept) => concept.imageUrl));
     const concepts = (Array.isArray(payload.concepts) ? payload.concepts : [])
       .slice(0, 8)
@@ -217,7 +253,7 @@ exports.adminSaveQuoteBuilder = async (req, res) => {
         });
       });
     const newMetadata = parseJson(req.body.conceptMetadata, 'Concept labels', []);
-    const files = req.files || [];
+    const files = req.files?.conceptImages || [];
     for (let index = 0; index < Math.min(files.length, 6); index += 1) {
       const imageUrl = await storeQuoteImage(files[index], `quote-concept-${quote._id}`);
       newImages.push(imageUrl);
@@ -243,6 +279,7 @@ exports.adminSaveQuoteBuilder = async (req, res) => {
       paymentTerms: text(payload.paymentTerms, 240, 'Payment terms confirmed before production begins.'),
       customerMessage: text(payload.customerMessage, 3000),
       internalNotes: text(payload.internalNotes, 3000),
+      productPreview,
       concepts: concepts.slice(0, 12),
       lastSentAt: null,
     };

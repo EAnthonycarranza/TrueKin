@@ -179,7 +179,7 @@ export default function Quote() {
               <span className="tk-quote-path-icon"><PenTool size={24} /></span>
               <span className="tk-quote-path-tag">Faster · production-ready</span>
               <h3>Design it in the studio</h3>
-              <p>Import your artwork onto a T-shirt or sticker, explore the 3D proof, and see a live starting estimate before you send it.</p>
+              <p>Import your artwork onto a T-shirt or sticker, explore the 3D proof, and send the finished brief for an admin-prepared quote by email.</p>
               <strong>Open design studio <ArrowRight size={15} /></strong>
             </Link>
           </div>
@@ -238,8 +238,8 @@ export default function Quote() {
                 <div>
                   <strong>Working on something bigger?</strong>
                   <p>
-                    For runs of 200+ shirts, ask about volume pricing and
-                    coordinated size matrices when you message us.
+                    For larger runs, share your quantities and size mix.
+                    An admin will include any volume pricing in your personal quote.
                   </p>
                 </div>
               </div>

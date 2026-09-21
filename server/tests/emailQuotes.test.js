@@ -32,11 +32,13 @@ test('a saved custom quote uses the requested sender and includes proof, concept
     _id: '507f1f77bcf86cd799439011',
     name: 'Alex <Customer>',
     email: 'alex@example.test',
+    quantity: 50,
     designPreviewUrl: '/uploads/customer-proof.png',
     adminQuote: {
       quoteNumber: 'TKQ-TEST',
       validUntil: '2026-10-01',
       lineItems: [{ description: '50 custom stickers', quantity: 50, unitPrice: 200 }],
+      productPreview: { title: 'Cut-to-shape sticker', description: 'Weather-resistant vinyl', imageUrl: '/uploads/product.png' },
       concepts: [{ label: 'Alternate finish', imageUrl: '/uploads/concept.png' }],
       subtotal: 12500,
       shipping: 0,
@@ -55,6 +57,9 @@ test('a saved custom quote uses the requested sender and includes proof, concept
   assert.match(message.subject, /TKQ-TEST/);
   assert.match(message.html, /https:\/\/truekin\.example\.test\/uploads\/customer-proof\.png/);
   assert.match(message.html, /https:\/\/truekin\.example\.test\/uploads\/concept\.png/);
+  assert.match(message.html, /https:\/\/truekin\.example\.test\/uploads\/product\.png/);
+  assert.match(message.html, /Cut-to-shape sticker/);
+  assert.match(message.text, /Requested quantity: 50/);
   assert.match(message.html, /50 custom stickers/);
   assert.match(message.html, /Alex &lt;Customer&gt;/);
   assert.match(message.text, /Quote total: \$125\.00/);

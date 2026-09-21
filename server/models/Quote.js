@@ -1,16 +1,5 @@
 const mongoose = require('mongoose');
 
-const estimateSchema = new mongoose.Schema({
-  unitPrice: { type: Number, min: 0, default: 0 },
-  production: { type: Number, min: 0, default: 0 },
-  setup: { type: Number, min: 0, default: 0 },
-  rush: { type: Number, min: 0, default: 0 },
-  subtotal: { type: Number, min: 0, default: 0 },
-  low: { type: Number, min: 0, default: 0 },
-  high: { type: Number, min: 0, default: 0 },
-  assumptions: { type: [String], default: [] },
-}, { _id: false });
-
 const lineItemSchema = new mongoose.Schema({
   description: { type: String, trim: true, maxlength: 240, required: true },
   quantity: { type: Number, min: 1, max: 100000, required: true },
@@ -21,6 +10,13 @@ const conceptSchema = new mongoose.Schema({
   label: { type: String, trim: true, maxlength: 120, default: 'Design concept' },
   imageUrl: { type: String, trim: true, maxlength: 2000, required: true },
   notes: { type: String, trim: true, maxlength: 500, default: '' },
+}, { _id: false });
+
+const productPreviewSchema = new mongoose.Schema({
+  sourceProductId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', default: null },
+  title: { type: String, trim: true, maxlength: 160, default: '' },
+  description: { type: String, trim: true, maxlength: 700, default: '' },
+  imageUrl: { type: String, trim: true, maxlength: 2000, default: '' },
 }, { _id: false });
 
 const adminQuoteSchema = new mongoose.Schema({
@@ -38,6 +34,7 @@ const adminQuoteSchema = new mongoose.Schema({
   paymentTerms: { type: String, trim: true, maxlength: 240, default: 'Payment terms confirmed before production begins.' },
   customerMessage: { type: String, trim: true, maxlength: 3000, default: '' },
   internalNotes: { type: String, trim: true, maxlength: 3000, default: '' },
+  productPreview: { type: productPreviewSchema, default: undefined },
   concepts: { type: [conceptSchema], default: [] },
   lastSentAt: { type: Date, default: null },
 }, { _id: false });
@@ -109,7 +106,6 @@ const quoteSchema = new mongoose.Schema({
     stickerSize: { type: String, enum: ['', '2in', '3in', '4in'], default: '' },
     rush: { type: Boolean, default: false },
   },
-  estimate: { type: estimateSchema, default: undefined },
   adminQuote: { type: adminQuoteSchema, default: () => ({}) },
   status: {
     type: String,

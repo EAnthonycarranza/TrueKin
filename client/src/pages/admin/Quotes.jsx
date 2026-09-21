@@ -50,14 +50,15 @@ export default function AdminQuotes() {
       ) : (
         <div className="card aq-table-wrap">
           <table className="aq-table">
-            <thead><tr><th>Request</th><th>Customer</th><th>Project</th><th>Estimate / total</th><th>Status</th><th /></tr></thead>
+            <thead><tr><th>Request</th><th>Customer</th><th>Project</th><th>Admin quote</th><th>Status</th><th /></tr></thead>
             <tbody>{visible.map((quote) => {
+              const prepared = Boolean(quote.adminQuote?.lineItems?.length);
               const total = quote.adminQuote?.total || 0;
               return <tr key={quote._id}>
                 <td data-label="Request"><span className="aq-type-icon"><ProductIcon type={quote.productType} /></span><div><strong>{quote.requestType === 'studio' ? 'Studio design' : 'Quick request'}</strong><small>{new Date(quote.createdAt).toLocaleDateString()}</small></div></td>
                 <td data-label="Customer"><strong>{quote.name}</strong><small>{quote.organization || quote.email}</small></td>
                 <td data-label="Project"><strong>{quote.productType === 'tshirt' ? 'T-shirt' : quote.productType === 'sticker' ? 'Sticker' : 'Custom project'} · {quote.quantity.toLocaleString()}</strong><small>{quote.neededBy ? `Needed ${quote.neededBy}` : 'No deadline supplied'}</small></td>
-                <td data-label="Estimate / total"><strong>{total ? money(total) : quote.estimate?.low ? `${money(quote.estimate.low)}–${money(quote.estimate.high)}` : 'Build quote'}</strong><small>{total ? 'Customer quote' : quote.estimate ? 'Customer estimate' : 'No estimate yet'}</small></td>
+                <td data-label="Admin quote"><strong>{prepared ? money(total) : 'Build quote'}</strong><small>{prepared ? 'Admin-prepared proposal' : 'Not prepared'}</small></td>
                 <td data-label="Status"><span className={`aq-status is-${quote.status}`}>{STATUS_LABELS[quote.status] || quote.status}</span></td>
                 <td><Link to={`/admin/quotes/${quote._id}`} className="aq-open" aria-label={`Open quote for ${quote.name}`}>Open <ArrowRight size={14} /></Link></td>
               </tr>;

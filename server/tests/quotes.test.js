@@ -1,11 +1,13 @@
 const { test, beforeEach, afterEach, mock } = require('node:test');
 const assert = require('node:assert/strict');
 const Quote = require('../models/Quote');
+const Product = require('../models/Product');
 const SiteSettings = require('../models/SiteSettings');
 const storage = require('../utils/storage');
 const email = require('../utils/email');
 const sharp = require('sharp');
 const quotes = require('../controllers/quoteController');
+const quoteRoutes = require('../routes/quotes');
 
 const response = () => ({
   code: 200,
@@ -71,7 +73,7 @@ test('quote quantities must be whole numbers rather than parseable prefixes', as
   assert.equal(global.fetch.mock.callCount(), 0);
 });
 
-test('studio quote recalculates the estimate and stores editable art with a durable preview', async () => {
+test('studio quote stores artwork and specifications without computing or returning a price', async () => {
   const png = await sharp({ create: { width: 24, height: 24, channels: 4, background: '#446343' } }).png().toBuffer();
   mock.method(SiteSettings, 'findOne', () => ({ select: async () => ({ studioTools: { stickerEnabled: true } }) }));
   mock.method(storage, 'saveImage', async () => '/uploads/quote-design-test.png');
@@ -88,8 +90,10 @@ test('studio quote recalculates the estimate and stores editable art with a dura
   assert.equal(created.designData, JSON.stringify(design));
   assert.equal(created.designPreviewUrl, '/uploads/quote-design-test.png');
   assert.equal(created.specifications.rush, true);
-  assert.ok(created.estimate.subtotal > 50);
-  assert.equal(created.estimate.subtotal, created.estimate.production + created.estimate.setup + created.estimate.rush);
+  assert.equal(created.specifications.stickerSize, '4in');
+  assert.equal(created.estimate, undefined);
+  assert.equal(res.data.estimate, undefined);
+  assert.equal(res.data.quote.estimate, undefined);
 });
 
 test('studio quote requires a matching editable design and preview before creating anything', async () => {
@@ -107,9 +111,13 @@ test('studio quote requires a matching editable design and preview before creati
 test('sticker studio quotes honor the admin availability switch', async () => {
   mock.method(SiteSettings, 'findOne', () => ({ select: async () => ({ studioTools: { stickerEnabled: false } }) }));
   const res = response();
-  await quotes.getEstimate({ body: { productType: 'sticker', quantity: 50 } }, res);
+  await quotes.createQuote({ body: body({ requestType: 'studio', productType: 'sticker' }) }, res);
   assert.equal(res.code, 400);
   assert.match(res.data.message, /unavailable/i);
+});
+
+test('the public quote router no longer exposes a pricing endpoint', () => {
+  assert.equal(quoteRoutes.stack.some((layer) => layer.route?.path === '/estimate'), false);
 });
 
 test('admin quote builder computes money on the server and never trusts client totals', async () => {
@@ -126,6 +134,39 @@ test('admin quote builder computes money on the server and never trusts client t
   assert.equal(quote.adminQuote.tax, 960);
   assert.equal(quote.adminQuote.total, 12960);
   assert.equal(quote.status, 'new');
+});
+
+test('admin can select a catalog product preview without trusting the submitted image URL', async () => {
+  const productId = '507f1f77bcf86cd799439012';
+  const quote = { _id: '507f1f77bcf86cd799439011', quantity: 24, status: 'new', adminQuote: { concepts: [] }, save: async () => {} };
+  mock.method(Quote, 'findById', async () => quote);
+  mock.method(Product, 'findById', async () => ({ _id: productId, title: 'Truekin Shirt', description: 'Premium cotton', imageUrls: ['/uploads/real-product.png'] }));
+  const res = response();
+  await quotes.adminSaveQuoteBuilder({
+    params: { id: quote._id },
+    body: { payload: JSON.stringify({ lineItems: [{ description: 'Custom shirts', quantity: 24, unitPrice: 2000 }], productPreview: { sourceProductId: productId, imageUrl: 'https://attacker.example/image.png' } }) },
+    files: {},
+  }, res);
+  assert.equal(res.code, 200);
+  assert.equal(quote.adminQuote.productPreview.imageUrl, '/uploads/real-product.png');
+  assert.equal(quote.adminQuote.total, 48000);
+});
+
+test('admin can upload a one-off product preview for a custom proposal', async () => {
+  const png = await sharp({ create: { width: 24, height: 24, channels: 4, background: '#446343' } }).png().toBuffer();
+  const quote = { _id: '507f1f77bcf86cd799439011', quantity: 12, status: 'new', adminQuote: { concepts: [] }, save: async () => {} };
+  mock.method(Quote, 'findById', async () => quote);
+  mock.method(storage, 'saveImage', async () => '/uploads/custom-product.png');
+  const res = response();
+  await quotes.adminSaveQuoteBuilder({
+    params: { id: quote._id },
+    body: { payload: JSON.stringify({ lineItems: [{ description: 'Custom product', quantity: 12, unitPrice: 1200 }], productPreview: { title: 'Embroidered tee', description: 'Black cotton, front logo' } }) },
+    files: { productImage: [{ buffer: png, mimetype: 'image/png' }] },
+  }, res);
+  assert.equal(res.code, 200);
+  assert.equal(quote.adminQuote.productPreview.title, 'Embroidered tee');
+  assert.equal(quote.adminQuote.productPreview.imageUrl, '/uploads/custom-product.png');
+  assert.equal(quote.adminQuote.total, 14400);
 });
 
 test('sending a saved proposal only marks it quoted after delivery succeeds', async () => {

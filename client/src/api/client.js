@@ -67,7 +67,6 @@ export const api = {
 
   // Quotes (custom-order inquiries)
   submitQuote: (body) => request('/quotes', { method: 'POST', body }),
-  getQuoteEstimate: (body) => request('/quotes/estimate', { method: 'POST', body }),
   submitStudioQuote: (formData) => request('/quotes', { method: 'POST', body: formData, isFormData: true }),
   adminGetQuotes: () => request('/quotes/admin/all'),
   adminGetQuote: (id) => request(`/quotes/admin/${id}`),
