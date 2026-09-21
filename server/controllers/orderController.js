@@ -455,7 +455,7 @@ function orderFromRow(row) {
       color: i.color ?? null,
       size: i.size ?? null,
       shirtStyle: ['unisex', 'mens', 'womens'].includes(i.shirtStyle) ? i.shirtStyle : 'unisex',
-      productType: i.productType === 'hat' ? 'hat' : 'tshirt',
+      productType: ['hat', 'sticker'].includes(i.productType) ? i.productType : 'tshirt',
     })),
     totalAmount: total,
     fulfillmentMethod,

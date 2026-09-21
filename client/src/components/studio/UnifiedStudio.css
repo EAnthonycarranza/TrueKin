@@ -6,6 +6,7 @@
 .us-studio button:focus-visible, .us-studio input:focus-visible, .us-studio textarea:focus-visible, .us-studio select:focus-visible { outline:2px solid var(--us-accent); outline-offset:3px; }
 .us-studio button svg { flex-shrink:0; }
 .us-studio p { margin:0; }
+.us-sticker-thumb { width:62px; height:52px; display:grid; place-items:center; color:#446343; background:linear-gradient(145deg,#fff,#e7eadf); border:1px solid var(--us-line); border-radius:11px; box-shadow:0 5px 10px #242b2017; flex-shrink:0; }
 .us-studio h2, .us-studio h3 { margin:0; color:var(--us-ink); line-height:1.15; }
 .us-header { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:19px 22px; border-bottom:1px solid var(--us-line); }
 .us-brand { display:flex; align-items:center; gap:12px; flex-shrink:0; }

@@ -86,7 +86,7 @@ export default function AdminProducts() {
                       <Search size={28} style={{ margin: '0 auto 10px', opacity: 0.3 }} />
                       <p style={{ fontWeight: 600, marginBottom: 4 }}>No products yet</p>
                       <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
-                        Create your first T-shirt or hat to get started.
+                        Create your first T-shirt or sticker to get started.
                       </p>
                       <Link to="/admin/products/new" className="btn btn-primary btn-sm">
                         <Plus size={15} /> Create Product
@@ -137,7 +137,7 @@ export default function AdminProducts() {
                           <span className="badge badge-dark" style={{ marginLeft: 8 }}>Featured</span>
                         )}
                         <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
-                          {p.productType === 'hat' ? 'Hat · One Size' : 'T-Shirt · Unisex'}
+                          {p.productType === 'hat' ? 'Hat · One Size' : p.productType === 'sticker' ? 'Sticker · One Size' : 'T-Shirt · Unisex'}
                           {' · Truekin Studio'}
                         </div>
                       </td>

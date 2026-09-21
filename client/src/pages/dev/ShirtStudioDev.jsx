@@ -22,7 +22,7 @@ export default function ShirtStudioDev() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 1500, padding: '0 clamp(10px, 3vw, 40px)', margin: '0 auto' }}>
         <div>
           <h1 style={{ margin: 0 }}>The creative playground</h1>
-          <p style={{ color: '#666', margin: '4px 0 0', fontSize: 13 }}>T-shirts and hats. One workspace, every angle. This playground does not change your catalog.</p>
+          <p style={{ color: '#666', margin: '4px 0 0', fontSize: 13 }}>T-shirts, stickers, and hats. One workspace, every angle. This playground does not change your catalog.</p>
         </div>
 
         <UnifiedStudio

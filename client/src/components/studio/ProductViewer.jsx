@@ -140,6 +140,67 @@ function BaseballHat({ color, prints }) {
   );
 }
 
+function stickerShape() {
+  const width = 1.64, height = 1.64, radius = 0.14;
+  const x = -width / 2, y = -height / 2;
+  const shape = new THREE.Shape();
+  shape.moveTo(x + radius, y);
+  shape.lineTo(x + width - radius, y);
+  shape.quadraticCurveTo(x + width, y, x + width, y + radius);
+  shape.lineTo(x + width, y + height - radius);
+  shape.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  shape.lineTo(x + radius, y + height);
+  shape.quadraticCurveTo(x, y + height, x, y + height - radius);
+  shape.lineTo(x, y + radius);
+  shape.quadraticCurveTo(x, y, x + radius, y);
+  return shape;
+}
+
+function stickerFaceGeometry(shape) {
+  const geometry = new THREE.ShapeGeometry(shape, 16);
+  const positions = geometry.getAttribute('position');
+  const uvs = geometry.getAttribute('uv');
+  for (let i = 0; i < positions.count; i += 1) {
+    uvs.setXY(i, positions.getX(i) / 1.64 + 0.5, positions.getY(i) / 1.64 + 0.5);
+  }
+  uvs.needsUpdate = true;
+  return geometry;
+}
+
+function StickerArtwork({ source, geometry }) {
+  const texture = useArtworkTexture(source);
+  if (!texture) return null;
+  return (
+    <mesh geometry={geometry} position={[0, 0, 0.083]} renderOrder={3}>
+      <meshStandardMaterial map={texture} transparent roughness={0.72} metalness={0} depthWrite={false} polygonOffset polygonOffsetFactor={-5} />
+    </mesh>
+  );
+}
+
+function StickerModel({ color, prints }) {
+  const shape = useMemo(() => stickerShape(), []);
+  const faceGeometry = useMemo(() => stickerFaceGeometry(shape), [shape]);
+  const edgeColor = useMemo(() => new THREE.Color(color).multiplyScalar(0.76), [color]);
+  return (
+    <group rotation={[-0.045, 0.08, -0.02]}>
+      <mesh position={[0, 0, -0.05]}>
+        <extrudeGeometry args={[shape, { depth: 0.1, bevelEnabled: true, bevelSegments: 4, steps: 1, bevelSize: 0.025, bevelThickness: 0.018 }]} />
+        <meshStandardMaterial color={edgeColor} roughness={0.92} metalness={0} />
+      </mesh>
+      <mesh geometry={faceGeometry} position={[0, 0, -0.071]} renderOrder={1}>
+        <meshStandardMaterial color="#e7e4dc" roughness={1} side={THREE.DoubleSide} />
+      </mesh>
+      <mesh geometry={faceGeometry} position={[0, 0, 0.080]} renderOrder={2}>
+        <meshStandardMaterial color={color} roughness={0.8} />
+      </mesh>
+      <StickerArtwork source={prints.front} geometry={faceGeometry} />
+      <mesh geometry={faceGeometry} position={[0, 0, 0.087]} renderOrder={4}>
+        <meshPhysicalMaterial color="#ffffff" transparent opacity={0.08} roughness={0.3} clearcoat={0.5} clearcoatRoughness={0.35} depthWrite={false} />
+      </mesh>
+    </group>
+  );
+}
+
 function CameraRig({ view, productType, controlsRef, resetToken }) {
   const goal = useRef(null);
   const size = useThree(state => state.size);
@@ -161,7 +222,7 @@ function CameraRig({ view, productType, controlsRef, resetToken }) {
     const aspect = Math.max(0.45, size.width / size.height);
     const desiredDistance = productType === 'hat'
       ? Math.max(3.8, 2.6 / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * aspect))
-      : Math.max(3.65, 2.3 / aspect);
+      : productType === 'sticker' ? Math.max(3.05, 2.1 / aspect) : Math.max(3.65, 2.3 / aspect);
     const diff = Math.atan2(Math.sin(target.theta - spherical.theta), Math.cos(target.theta - spherical.theta));
     spherical.theta += diff * Math.min(1, delta * 10);
     spherical.phi = THREE.MathUtils.lerp(spherical.phi, productType === 'hat' ? 1.31 : 1.52, Math.min(1, delta * 10));
@@ -209,7 +270,7 @@ const ProductViewer = forwardRef(function ProductViewer({ productType = 'tshirt'
   const retry = () => { useGLTF.clear(MODEL_PATH); setGeneration(value => value + 1); };
   useImperativeHandle(ref, () => ({ snapshot: () => bridgeRef.current?.snapshot() ?? null }), []);
   return (
-    <div className={`tk-product-viewer ${className}`} style={{ position: 'relative', width: '100%', height: '100%', minHeight: 220, overflow: 'hidden', ...style }} aria-label={`Interactive 3D ${productType === 'hat' ? 'hat' : 'T-shirt'} preview`}>
+    <div className={`tk-product-viewer ${className}`} style={{ position: 'relative', width: '100%', height: '100%', minHeight: 220, overflow: 'hidden', ...style }} aria-label={`Interactive 3D ${productType === 'hat' ? 'hat' : productType === 'sticker' ? 'sticker' : 'T-shirt'} preview`}>
       {readyScene !== sceneKey && <div style={{ ...overlayStyle, pointerEvents: 'none' }} role="status"><Box size={24} aria-hidden="true" /><span>Preparing your 3D preview…</span></div>}
       {lostScene === sceneKey ? (
         <div style={overlayStyle} role="alert"><strong>3D preview paused</strong><span>{customerView ? 'Reload the preview or return to the product photos.' : 'Your artwork is still saved in the editor.'}</span><button type="button" className="btn btn-secondary btn-sm" onClick={retry}><RotateCcw size={16} /> Reload preview</button></div>
@@ -221,8 +282,8 @@ const ProductViewer = forwardRef(function ProductViewer({ productType = 'tshirt'
               <directionalLight position={[3, 4, 5]} intensity={1.6} color="#fffdf8" />
               <directionalLight position={[-4, 1, 2]} intensity={0.65} color="#f1f5ff" />
               <directionalLight position={[2, 3, -4]} intensity={1.0} />
-              {productType === 'hat' ? <BaseballHat color={color} prints={prints} /> : <TShirt color={color} prints={prints} />}
-              <ContactShadows position={[0, productType === 'hat' ? -0.56 : -0.87, 0]} opacity={0.23} scale={4} blur={2.8} far={2} resolution={256} color="#403e36" frames={1} />
+              {productType === 'hat' ? <BaseballHat color={color} prints={prints} /> : productType === 'sticker' ? <StickerModel color={color} prints={prints} /> : <TShirt color={color} prints={prints} />}
+              <ContactShadows position={[0, productType === 'hat' ? -0.56 : productType === 'sticker' ? -0.94 : -0.87, 0]} opacity={0.23} scale={4} blur={2.8} far={2} resolution={256} color="#403e36" frames={1} />
               <OrbitControls ref={controlsRef} enabled={interactive} enablePan={false} enableDamping dampingFactor={0.08} minDistance={1.75} maxDistance={10} minPolarAngle={0.5} maxPolarAngle={2.1} autoRotate={autoRotate} autoRotateSpeed={1.2} />
               <CameraRig view={view} productType={productType} controlsRef={controlsRef} resetToken={resetToken} />
               <RenderBridge ref={bridgeRef} onReady={handleReady} onContextLost={handleLoss} />

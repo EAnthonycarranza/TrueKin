@@ -20,8 +20,41 @@ export function loadImage(src) {
 }
 
 export function mockupSource(type, view) {
+  if (type === 'sticker') return '';
   if (type === 'hat') return '/studio/hat-front.png';
   return view === 'back' ? back : ['left', 'right'].includes(view) ? side : front;
+}
+
+function renderStickerMockup(color, background) {
+  const canvas = document.createElement('canvas');
+  canvas.width = BOARD.width; canvas.height = BOARD.height;
+  const ctx = canvas.getContext('2d');
+  if (background) {
+    ctx.fillStyle = background;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  const x = 135, y = 185, size = 630, radius = 62;
+  ctx.save();
+  ctx.shadowColor = 'rgba(28, 27, 23, .22)';
+  ctx.shadowBlur = 38;
+  ctx.shadowOffsetY = 24;
+  ctx.fillStyle = '#d8d7d0';
+  ctx.beginPath();
+  ctx.roundRect(x + 5, y + 10, size, size, radius);
+  ctx.fill();
+  ctx.restore();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.roundRect(x, y, size, size, radius);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(20, 20, 18, .12)';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.18)';
+  ctx.beginPath();
+  ctx.roundRect(x + 14, y + 14, size - 28, size - 28, radius - 12);
+  ctx.fill();
+  return canvas;
 }
 
 // The reference-derived hat photograph arrives on white. Remove only the
@@ -48,6 +81,7 @@ function clearConnectedWhite(pixels, width, height) {
 
 /** Retain the source photograph's lighting and alpha while recoloring fabric. */
 export async function renderMockup(type, view, color, background = null) {
+  if (type === 'sticker') return renderStickerMockup(color, background);
   const img = await loadImage(mockupSource(type, view));
   const c = document.createElement('canvas');
   c.width = BOARD.width; c.height = BOARD.height;

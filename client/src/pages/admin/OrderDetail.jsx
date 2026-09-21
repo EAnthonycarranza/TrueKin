@@ -253,7 +253,7 @@ export default function AdminOrderDetail() {
                     <p style={{ fontWeight: 500, fontSize: 14 }}>{item.title}</p>
                     <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                       Qty: {item.quantity}
-                      {item.shirtStyle && <> · {item.productType === 'hat' ? 'Adjustable hat' : 'Unisex'}</>}
+                      {item.shirtStyle && <> · {item.productType === 'hat' ? 'Adjustable hat' : item.productType === 'sticker' ? 'Sticker' : 'Unisex'}</>}
                       {item.size && <> · Size: {item.size}</>}
                       {item.color && <> · {item.color}</>}
                     </p>

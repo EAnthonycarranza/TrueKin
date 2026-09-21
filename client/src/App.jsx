@@ -18,6 +18,7 @@ import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
 import MyOrders from './pages/MyOrders';
 import Quote from './pages/Quote';
+import DesignQuote from './pages/DesignQuote';
 import Track from './pages/Track';
 
 import AdminDashboard from './pages/admin/Dashboard';
@@ -27,6 +28,9 @@ import AdminOrders from './pages/admin/Orders';
 import AdminOrderDetail from './pages/admin/OrderDetail';
 import AdminPickupLocations from './pages/admin/PickupLocations';
 import AdminHomepage from './pages/admin/Homepage';
+import AdminQuotes from './pages/admin/Quotes';
+import AdminQuoteBuilder from './pages/admin/QuoteBuilder';
+import AdminSettings from './pages/admin/Settings';
 import Pickup from './pages/Pickup';
 
 // Local-only playground for the 3D shirt studio; stripped from production builds.
@@ -65,12 +69,16 @@ function AppShell() {
         <Route path="/register" element={<Register />} />
         <Route path="/my-orders" element={<ProtectedRoute><MyOrders /></ProtectedRoute>} />
         <Route path="/quote" element={<Quote />} />
+        <Route path="/quote/design" element={<DesignQuote />} />
         <Route path="/track" element={<Track />} />
         <Route path="/pickup" element={<Pickup />} />
 
         {/* Admin Routes */}
         <Route path="/admin/pickup-locations" element={<ProtectedRoute admin><AdminPickupLocations /></ProtectedRoute>} />
         <Route path="/admin/homepage" element={<ProtectedRoute admin><AdminHomepage /></ProtectedRoute>} />
+        <Route path="/admin/settings" element={<ProtectedRoute admin><AdminSettings /></ProtectedRoute>} />
+        <Route path="/admin/quotes" element={<ProtectedRoute admin><AdminQuotes /></ProtectedRoute>} />
+        <Route path="/admin/quotes/:id" element={<ProtectedRoute admin><AdminQuoteBuilder /></ProtectedRoute>} />
         <Route path="/admin" element={<ProtectedRoute admin><AdminDashboard /></ProtectedRoute>} />
         <Route path="/admin/products" element={<ProtectedRoute admin><AdminProducts /></ProtectedRoute>} />
         <Route path="/admin/products/new" element={<ProtectedRoute admin><AdminProductEdit /></ProtectedRoute>} />

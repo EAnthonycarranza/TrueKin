@@ -1,5 +1,5 @@
 import { useDeferredValue, useRef, useState } from 'react';
-import { Check, Eye, EyeOff, ImagePlus, Layers, LockKeyhole, Plus, Search, Shirt, Upload, X } from 'lucide-react';
+import { Check, Eye, EyeOff, ImagePlus, Layers, LockKeyhole, Plus, Search, Shirt, Sticker as StickerIcon, Upload, X } from 'lucide-react';
 import { CLIPART_CATEGORIES, FONT_OPTIONS, SHAPE_DEFS } from '../designer/designerConstants';
 import { COLORS, COLOR_NAMES } from './studioDocument';
 import { mockupSource } from './mockups';
@@ -7,7 +7,7 @@ import { mockupSource } from './mockups';
 const CATEGORIES = CLIPART_CATEGORIES.filter(c => c.name !== 'Shapes');
 const ALL_ASSETS = CATEGORIES.flatMap(c => c.items.map(item => ({ ...item, category: c.name })));
 
-export default function StudioTools({ tool, productType, color, onProductChange, onColorChange, onAddText, onAddImage, onAddShape, layers, selected, onCommand, onClose, busy }) {
+export default function StudioTools({ tool, productType, availableProductTypes = ['tshirt', 'hat', 'sticker'], color, onProductChange, onColorChange, onAddText, onAddImage, onAddShape, layers, selected, onCommand, onClose, busy }) {
   const [text, setText] = useState('STAND TRUE. STAY LOYAL.');
   const [font, setFont] = useState('Oswald');
   const [ink, setInk] = useState('#181818');
@@ -23,14 +23,14 @@ export default function StudioTools({ tool, productType, color, onProductChange,
     <div className="us-panel-heading"><div><span className="us-eyebrow">CREATIVE TOOLKIT</span><h3>{titles[tool]}</h3></div><button type="button" className="us-icon-button us-mobile-only" aria-label="Close toolkit" onClick={onClose}><X size={18} /></button></div>
     {tool === 'product' && <>
       <p className="us-muted">Choose your canvas. Each product keeps its own artwork while you explore.</p>
-      <div className="us-product-options">{[['tshirt', 'T-shirt', 'Front, back & sleeves'], ['hat', 'Baseball hat', 'Signature front panel']].map(([id, label, sub]) => <button type="button" key={id} className={`us-product-option ${productType === id ? 'is-active' : ''}`} aria-pressed={productType === id} disabled={busy} onClick={() => onProductChange(id)}>
-        <img src={mockupSource(id, 'front')} alt="" /><span><strong>{label}</strong><small>{sub}</small></span>{productType === id && <Check size={16} />}
+      <div className="us-product-options">{[['tshirt', 'T-shirt', 'Front, back & sleeves'], ['sticker', 'Sticker', 'Durable full-color face'], ['hat', 'Baseball hat', 'Signature front panel']].filter(([id]) => availableProductTypes.includes(id)).map(([id, label, sub]) => <button type="button" key={id} className={`us-product-option ${productType === id ? 'is-active' : ''}`} aria-pressed={productType === id} disabled={busy} onClick={() => onProductChange(id)}>
+        {id === 'sticker' ? <span className="us-sticker-thumb"><StickerIcon size={31} /></span> : <img src={mockupSource(id, 'front')} alt="" />}<span><strong>{label}</strong><small>{sub}</small></span>{productType === id && <Check size={16} />}
       </button>)}</div>
       <div className="us-panel-divider" />
-      <div className="us-field-row"><span className="us-label">Garment color</span><span className="us-muted">{COLOR_NAMES[COLORS.findIndex(c => c.toLowerCase() === color.toLowerCase())] || 'Custom'}</span></div>
+      <div className="us-field-row"><span className="us-label">{productType === 'sticker' ? 'Sticker base' : 'Garment color'}</span><span className="us-muted">{COLOR_NAMES[COLORS.findIndex(c => c.toLowerCase() === color.toLowerCase())] || 'Custom'}</span></div>
       <div className="us-swatches">{COLORS.map((hex, i) => <button type="button" key={hex} style={{ '--swatch': hex }} className={`us-swatch ${color.toLowerCase() === hex.toLowerCase() ? 'is-active' : ''}`} onClick={() => onColorChange(hex)} aria-label={`${COLOR_NAMES[i]} garment`} aria-pressed={color.toLowerCase() === hex.toLowerCase()} disabled={busy}>{color.toLowerCase() === hex.toLowerCase() && <Check size={16} color={i === 0 || i === 3 || i === 8 ? '#181818' : '#fff'} />}</button>)}</div>
       <label className="us-color-field"><input type="color" value={color} onChange={e => onColorChange(e.target.value)} disabled={busy} /><span>Custom color</span><code>{color.toUpperCase()}</code></label>
-      <div className="us-tip"><Shirt size={19} /><p>One shared design powers your photo and 3D previews. Changes appear in both.</p></div>
+      <div className="us-tip">{productType === 'sticker' ? <StickerIcon size={19} /> : <Shirt size={19} />}<p>One shared design powers your photo and 3D previews. Changes appear in both.</p></div>
     </>}
     {tool === 'text' && <>
       <p className="us-muted">A bold statement or a little reminder. Add text, then make it your own.</p>

@@ -124,6 +124,7 @@ export default function ProductDetail() {
     catch { return null; }
   })();
   const isHat = (product.productType || parsedDesign?.productType) === 'hat';
+  const isSticker = (product.productType || parsedDesign?.productType) === 'sticker';
 
   const hasColors = product?.availableColors?.length > 0;
   const hasSizes = product?.sizes?.length > 0;
@@ -215,7 +216,7 @@ export default function ProductDetail() {
 
             {/* Fit: unisex only — Truekin tees are cut on one unisex last. */}
             <div style={styles.optionGroup}>
-              <label style={styles.optionLabel}>Fit</label>
+              <label style={styles.optionLabel}>{isSticker ? 'Format' : 'Fit'}</label>
               <div
                 style={{
                   display: 'inline-flex',
@@ -239,7 +240,7 @@ export default function ProductDetail() {
                   <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
                   <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                 </svg>
-                {isHat ? 'Adjustable Hat · One Size' : 'Unisex Fit · One Cut For The Kin'}
+                {isHat ? 'Adjustable Hat · One Size' : isSticker ? 'Sticker · Finished One Piece At A Time' : 'Unisex Fit · One Cut For The Kin'}
               </div>
             </div>
 

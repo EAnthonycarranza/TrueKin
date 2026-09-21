@@ -161,6 +161,7 @@ export default function AdminDashboard() {
           { to: '/admin/products', icon: Shirt, label: 'Manage Drops', sub: 'Edit designs and inventory' },
           { to: '/admin/products/new', icon: PlusCircle, label: 'Design a New Tee', sub: 'Launch the 2D or 3D editor' },
           { to: '/admin/orders', icon: ClipboardList, label: 'Fulfill Orders', sub: 'Print, label, and send with care' },
+          { to: '/admin/quotes', icon: ClipboardList, label: 'Build Custom Quotes', sub: 'Price studio submissions and concepts' },
         ].map((a) => (
           <Link
             key={a.to}

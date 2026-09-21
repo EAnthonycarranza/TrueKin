@@ -76,7 +76,8 @@ function orderRef(order) {
 }
 
 function itemLine(item) {
-  const extras = [item.productType === 'hat' ? 'Adjustable hat' : 'Unisex', item.size ? `Size ${item.size}` : null, item.color || null]
+  const typeLabel = item.productType === 'hat' ? 'Adjustable hat' : item.productType === 'sticker' ? 'Sticker' : 'Unisex';
+  const extras = [typeLabel, item.size ? `Size ${item.size}` : null, item.color || null]
     .filter(Boolean)
     .join(' &middot; ');
 
@@ -366,7 +367,7 @@ async function deliver({ to, subject, html, text, tag }) {
   const transporter = getTransporter();
   if (!transporter) {
     console.warn(`Email not configured, skipping ${tag}.`);
-    return;
+    return false;
   }
   const configuredFrom = (process.env.EMAIL_FROM || process.env.SMTP_USER).trim();
   const from = configuredFrom.includes('<')
@@ -387,10 +388,76 @@ async function deliver({ to, subject, html, text, tag }) {
       }],
     });
     console.log(`[Email] ${tag} sent: ${info.messageId}`);
+    return true;
   } catch (err) {
     console.error(`[Email] ${tag} failed:`, err.message);
+    return false;
   }
 }
+
+/** The admin-reviewed proposal, sent explicitly from the quote builder. */
+exports.sendQuoteProposal = async function sendQuoteProposal(quote) {
+  const proposal = quote.adminQuote;
+  if (!quote.email || !proposal?.lineItems?.length) return false;
+  const reference = proposal.quoteNumber || `TKQ-${quote._id.toString().slice(-6).toUpperCase()}`;
+  const baseUrl = (process.env.CLIENT_URL || '').replace(/\/$/, '');
+  const imageUrl = (value) => /^https?:\/\//i.test(value) ? value : `${baseUrl}${value}`;
+  const concepts = [
+    ...(quote.designPreviewUrl ? [{ label: 'Your studio design', imageUrl: quote.designPreviewUrl }] : []),
+    ...(proposal.concepts || []),
+  ].slice(0, 4);
+  const itemRows = proposal.lineItems.map((item) => `
+    <tr><td style="padding:12px 0;border-bottom:1px solid ${C.line};font-family:${SANS};font-size:13px;color:${C.ink};">${escapeHtml(item.description)}<br/><small style="color:${C.muted};">${item.quantity} &times; ${money(item.unitPrice)}</small></td><td style="text-align:right;border-bottom:1px solid ${C.line};font-family:${SANS};font-weight:700;">${money(item.quantity * item.unitPrice)}</td></tr>
+  `).join('');
+  const conceptImages = concepts.map((concept) => `
+    <td width="50%" style="padding:8px 8px 12px 0;vertical-align:top;"><img src="${escapeHtml(imageUrl(concept.imageUrl))}" alt="${escapeHtml(concept.label)}" width="220" style="display:block;width:100%;height:auto;max-width:220px;background:${C.wash};border:1px solid ${C.line};" /><div style="font-family:${SANS};color:${C.body};font-size:11px;padding-top:6px;">${escapeHtml(concept.label)}</div></td>
+  `);
+  const rows = [];
+  for (let i = 0; i < conceptImages.length; i += 2) rows.push(`<tr>${conceptImages[i]}${conceptImages[i + 1] || '<td></td>'}</tr>`);
+
+  const body = `
+    ${headline({ chip: 'Custom quote', title: 'Let&rsquo;s make', accentTitle: 'something true.', lead: `Hi ${escapeHtml(quote.name)}, here&rsquo;s your Truekin quote and artwork brief. Review the details below, then reply to this email with any changes or approval.` })}
+    ${panel(`<div style="font-family:${MONO};font-size:13px;color:${C.muted};">${escapeHtml(reference)}</div><div style="font-family:${SANS};font-size:12px;color:${C.body};margin-top:8px;">Valid through ${escapeHtml(proposal.validUntil || 'confirmation with Truekin')}</div>`)}
+    ${rows.length ? `${label('Design concepts')}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">${rows.join('')}</table>` : ''}
+    ${label('Project pricing')}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">${itemRows}</table>
+    ${panel(`<div style="font-family:${SANS};font-size:12px;color:${C.body};line-height:1.8;">Items + setup: ${money(proposal.subtotal)}${proposal.shipping ? `<br/>Shipping: ${money(proposal.shipping)}` : ''}${proposal.discount ? `<br/>Discount: -${money(proposal.discount)}` : ''}${proposal.tax ? `<br/>Tax: ${money(proposal.tax)}` : ''}</div><div style="border-top:1px solid ${C.line};margin-top:10px;padding-top:10px;font-family:${SANS};font-size:19px;font-weight:800;color:${C.ink};">Quote total <span style="float:right;">${money(proposal.total)}</span></div>`, { background: C.card })}
+    ${panel(`<div style="font-family:${SANS};font-size:12px;line-height:1.6;color:${C.body};"><strong style="color:${C.ink};">Production timing</strong><br/>${escapeHtml(proposal.leadTime)}<br/><br/><strong style="color:${C.ink};">Payment terms</strong><br/>${escapeHtml(proposal.paymentTerms)}</div>`)}
+    ${proposal.customerMessage ? `<p style="font-family:${SANS};font-size:13px;line-height:1.7;color:${C.body};">${escapeHtml(proposal.customerMessage).replace(/\n/g, '<br/>')}</p>` : ''}
+    <p style="font-family:${SANS};font-size:12px;color:${C.muted};">Reply to this message to approve or discuss changes. Your quote is not a payment request.</p>
+  `;
+
+  const plain = plainText([
+    `Hi ${quote.name},`,
+    '',
+    `Truekin custom quote ${reference}`,
+    `Valid through ${proposal.validUntil || 'confirmation with Truekin'}`,
+    '',
+    'PROJECT PRICING',
+    ...proposal.lineItems.map((item) => `${item.description} — ${item.quantity} x ${money(item.unitPrice)} = ${money(item.quantity * item.unitPrice)}`),
+    `Items + setup: ${money(proposal.subtotal)}`,
+    proposal.shipping ? `Shipping: ${money(proposal.shipping)}` : null,
+    proposal.discount ? `Discount: -${money(proposal.discount)}` : null,
+    proposal.tax ? `Tax: ${money(proposal.tax)}` : null,
+    `Quote total: ${money(proposal.total)}`,
+    '',
+    `Lead time: ${proposal.leadTime}`,
+    `Payment terms: ${proposal.paymentTerms}`,
+    proposal.customerMessage ? `\n${proposal.customerMessage}` : null,
+    '',
+    'Reply to approve or request changes. This is not a payment request.',
+    '',
+    'TRUEKIN — Stand True. Stay Loyal.',
+  ]);
+
+  return deliver({
+    to: quote.email,
+    subject: `${reference} · Your Truekin custom quote`,
+    html: wrapEmail(body, `Your custom quote ${reference} is ready for review.`),
+    text: plain,
+    tag: `custom quote ${reference}`,
+  });
+};
 
 exports.sendOrderConfirmation = async function sendOrderConfirmation(order) {
   const to = order.guestEmail || order.user?.email;

@@ -14,7 +14,8 @@ function FlatPreview({ design, view, color }) {
     return () => { alive = false; };
   }, [design, view, color, key, retry]);
   if (result?.key === key && result.design === design && result.error) return <div role="alert" style={{ padding: 24 }}>The photo preview could not load. <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setResult(null); setRetry(n => n + 1); }}>Retry</button></div>;
-  return result?.key === key && result.design === design ? <img src={result.src} alt={`Designed ${design.productType === 'hat' ? 'hat' : 'T-shirt'}, ${view}`} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <div role="status" style={{ padding: 24 }}>Preparing preview…</div>;
+  const productLabel = design.productType === 'hat' ? 'hat' : design.productType === 'sticker' ? 'sticker' : 'T-shirt';
+  return result?.key === key && result.design === design ? <img src={result.src} alt={`Designed ${productLabel}, ${view}`} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <div role="status" style={{ padding: 24 }}>Preparing preview…</div>;
 }
 
 export default function UnifiedPreview({ designData, colorOverride, height = 500, style = {} }) {
@@ -25,7 +26,7 @@ export default function UnifiedPreview({ designData, colorOverride, height = 500
     catch { return null; }
   }, [designData]);
   if (!design) return <div style={{ padding: 24 }}>No design preview available.</div>;
-  const type = design.productType === 'hat' ? 'hat' : 'tshirt';
+  const type = ['hat', 'sticker'].includes(design.productType) ? design.productType : 'tshirt';
   const views = SURFACES[type];
   const activeView = views.some(v => v.id === view) ? view : 'front';
   const color = colorOverride || design.garmentColor || design.tshirtColor || '#FFFFFF';

@@ -22,6 +22,13 @@ test('hat photos use the front panel without shirt backs or sleeve controls', ()
   assert.deepEqual(media.items.map(item => item.view), ['front']);
 });
 
+test('sticker media exposes its decorated front and dimensional viewer only', () => {
+  const media = buildProductMedia(product({ productType: 'sticker', designData: design({ productType: 'sticker', prints: { front: '/sticker-art.png' } }), imageUrls: [] }));
+  assert.equal(media.productType, 'sticker');
+  assert.deepEqual(media.items.map(item => item.view), ['front']);
+  assert.equal(media.canExplore3D, true);
+});
+
 test('selected-color photographs are matched regardless of hex case', () => {
   const media = buildProductMedia(product({ colorImages: { '#ffc0cb': { front: '/pink-front.png', back: '/pink-back.png' } } }), '#FFC0CB');
   assert.deepEqual(media.items.map(item => item.url), ['/pink-front.png', '/pink-back.png']);

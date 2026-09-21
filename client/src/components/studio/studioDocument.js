@@ -13,7 +13,12 @@ export const SURFACES = {
     { id: 'right', label: 'Right sleeve', area: { x: .41837215, y: .24203936, w: .12257126, h: .12889568 } },
   ],
   hat: [{ id: 'front', label: 'Front panel', area: { x: .3267, y: .3567, w: .3467, h: .20802 } }],
+  sticker: [{ id: 'front', label: 'Front', area: { x: .2, y: .23, w: .6, h: .54 } }],
 };
+
+export function normalizeProductType(value, fallback = 'tshirt') {
+  return Object.hasOwn(SURFACES, value) ? value : Object.hasOwn(SURFACES, fallback) ? fallback : 'tshirt';
+}
 
 export function surfaceInfo(productType, view = 'front') {
   const surfaces = SURFACES[productType] || SURFACES.tshirt;
@@ -32,6 +37,7 @@ export function parseDesign(value) {
 }
 
 export function emptyDocument(productType = 'tshirt') {
+  productType = normalizeProductType(productType);
   return {
     studio: STUDIO_ID, version: STUDIO_VERSION,
     productType, garmentColor: '#FFFFFF', tshirtColor: '#FFFFFF',
@@ -57,7 +63,7 @@ function migrateObject(object, index) {
 export function normalizeDocument(value, fallbackType = 'tshirt') {
   const data = parseDesign(value);
   if (!data) return emptyDocument(fallbackType);
-  const type = data.productType === 'hat' ? 'hat' : 'tshirt';
+  const type = normalizeProductType(data.productType, fallbackType);
   const next = emptyDocument(type);
   next.garmentColor = data.garmentColor || data.tshirtColor || '#FFFFFF';
   next.tshirtColor = next.garmentColor;

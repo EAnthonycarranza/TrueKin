@@ -25,7 +25,7 @@ const productSchema = new mongoose.Schema({
   },
   productType: {
     type: String,
-    enum: ['tshirt', 'hat'],
+    enum: ['tshirt', 'hat', 'sticker'],
     default: 'tshirt',
   },
   featured: {

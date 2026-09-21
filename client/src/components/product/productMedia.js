@@ -11,8 +11,9 @@ export function readProductDesign(value, fallbackType = 'tshirt') {
   try { data = typeof value === 'string' ? JSON.parse(value) : value; } catch { return null; }
   if (!isRecord(data)) return null;
   if (data.studio === 'truekin-unified' && Number(data.version || 1) > 1) return null;
-  const productType = (data.productType || fallbackType) === 'hat' ? 'hat' : 'tshirt';
-  const views = productType === 'hat' ? VIEWS.slice(0, 1) : VIEWS;
+  const requestedType = data.productType || fallbackType;
+  const productType = ['hat', 'sticker'].includes(requestedType) ? requestedType : 'tshirt';
+  const views = productType === 'tshirt' ? VIEWS : VIEWS.slice(0, 1);
   const prints = {}, legacyTextures = {};
   for (const { id } of views) {
     const raster = data.surfaces?.[id]?.raster;
@@ -29,7 +30,8 @@ export function readProductDesign(value, fallbackType = 'tshirt') {
 }
 
 export function buildProductMedia(product, selectedColor, design = readProductDesign(product.designData, product.productType)) {
-  const productType = design?.productType || (product.productType === 'hat' ? 'hat' : 'tshirt');
+  const storedType = ['hat', 'sticker'].includes(product.productType) ? product.productType : 'tshirt';
+  const productType = design?.productType || storedType;
   const color = hex(selectedColor) || design?.garmentColor || hex(product.availableColors?.[0]) || '#FFFFFF';
   const colorEntry = Object.entries(isRecord(product.colorImages) ? product.colorImages : {}).find(([key]) => hex(key) === color)?.[1];
   const items = [], seen = new Set();
@@ -39,11 +41,11 @@ export function buildProductMedia(product, selectedColor, design = readProductDe
   };
   if (isRecord(colorEntry)) {
     addPhoto(colorEntry.front, 'photo-front', 'Front', 'front');
-    if (productType !== 'hat') addPhoto(colorEntry.back, 'photo-back', 'Back', 'back');
+    if (productType === 'tshirt') addPhoto(colorEntry.back, 'photo-back', 'Back', 'back');
   }
   const hasColorPhotos = items.length > 0;
   if (design) {
-    for (const view of productType === 'hat' ? VIEWS.slice(0, 1) : VIEWS) {
+    for (const view of productType === 'tshirt' ? VIEWS : VIEWS.slice(0, 1)) {
       if (items.some(item => item.view === view.id)) continue;
       if (['left', 'right'].includes(view.id) && !design.prints[view.id] && !design.legacyTextures[view.id]) continue;
       items.push({ id: `render-${view.id}`, kind: 'render', view: view.id, label: view.label });

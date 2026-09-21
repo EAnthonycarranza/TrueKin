@@ -17,8 +17,10 @@ test('new products have separate documents and only supported surfaces', () => {
   const shirt = emptyDocument('tshirt');
   const secondShirt = emptyDocument('tshirt');
   const hat = emptyDocument('hat');
+  const sticker = emptyDocument('sticker');
   assert.deepEqual(Object.keys(shirt.surfaces), ['front', 'back', 'left', 'right']);
   assert.deepEqual(Object.keys(hat.surfaces), ['front']);
+  assert.deepEqual(Object.keys(sticker.surfaces), ['front']);
   shirt.surfaces.front.objects.push(artwork('front'));
   shirt.prints.front = raster;
   assert.deepEqual(shirt.surfaces.back.objects, []);
@@ -26,6 +28,7 @@ test('new products have separate documents and only supported surfaces', () => {
   assert.deepEqual(hat.surfaces.front.objects, []);
   assert.deepEqual(secondShirt.prints, {});
   assert.deepEqual(hat.prints, {});
+  assert.deepEqual(sticker.prints, {});
 });
 
 test('all print rectangles stay inside the shared artboard', () => {
@@ -41,7 +44,21 @@ test('all print rectangles stay inside the shared artboard', () => {
   const hat = printRect('hat');
   assert.ok(Math.abs(hat.width / hat.height - 1.5) < 0.001, 'hat front print is 3:2');
   assert.equal(surfaceInfo('hat', 'back').id, 'front');
+  assert.equal(surfaceInfo('sticker', 'back').id, 'front');
   assert.equal(surfaceInfo('unknown', 'back').id, 'back');
+});
+
+test('sticker artwork and print survive saving with a single front surface', () => {
+  const original = emptyDocument('sticker');
+  original.garmentColor = '#c28b32';
+  original.surfaces.front.objects.push(artwork('sticker-wordmark'));
+  original.prints.front = raster;
+  const reopened = roundTrip(original);
+  assert.equal(reopened.productType, 'sticker');
+  assert.deepEqual(Object.keys(reopened.surfaces), ['front']);
+  assert.equal(reopened.garmentColor, '#c28b32');
+  assert.deepEqual(reopened.surfaces.front.objects, original.surfaces.front.objects);
+  assert.equal(reopened.prints.front, raster);
 });
 
 test('empty and malformed inputs have predictable outcomes without mutating input', () => {

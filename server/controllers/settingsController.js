@@ -5,6 +5,7 @@ const { inputError, readText } = require('../utils/fulfillment');
 
 /** The hero has three fixed card positions in the layout. */
 const HERO_CARD_COUNT = 3;
+const STUDIO_DEFAULTS = Object.freeze({ hatEnabled: false, stickerEnabled: true });
 
 /** Shape a product for the homepage hero — never the whole document. */
 function heroProduct(product) {
@@ -20,6 +21,43 @@ function heroProduct(product) {
 async function loadSettings() {
   return (await SiteSettings.findOne({ key: 'site' })) || null;
 }
+
+function studioTools(settings) {
+  return {
+    hatEnabled: settings?.studioTools?.hatEnabled ?? STUDIO_DEFAULTS.hatEnabled,
+    stickerEnabled: settings?.studioTools?.stickerEnabled ?? STUDIO_DEFAULTS.stickerEnabled,
+  };
+}
+
+exports.getStudioSettings = async (_req, res) => {
+  try {
+    res.json({ studioTools: studioTools(await loadSettings()) });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.getStudioSettingsAdmin = exports.getStudioSettings;
+
+exports.updateStudioSettings = async (req, res) => {
+  try {
+    if (typeof req.body?.hatEnabled !== 'boolean' || typeof req.body?.stickerEnabled !== 'boolean') {
+      throw inputError('Studio availability values must be on or off');
+    }
+    const next = {
+      hatEnabled: req.body.hatEnabled,
+      stickerEnabled: req.body.stickerEnabled,
+    };
+    await SiteSettings.findOneAndUpdate(
+      { key: 'site' },
+      { $set: { studioTools: next } },
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    );
+    res.json({ studioTools: next });
+  } catch (error) {
+    res.status(error.status || 500).json({ message: error.message });
+  }
+};
 
 /**
  * Public: the homepage's editable content.

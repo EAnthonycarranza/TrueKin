@@ -99,7 +99,7 @@ exports.createCheckoutSession = async (req, res) => {
         }
       }
 
-      const fitLabel = product.productType === 'hat' ? 'Adjustable' : 'Unisex';
+      const fitLabel = product.productType === 'hat' ? 'Adjustable' : product.productType === 'sticker' ? 'Sticker' : 'Unisex';
       const itemName = item.size
         ? `${product.title} (${fitLabel} / ${item.size})`
         : `${product.title} (${fitLabel})`;

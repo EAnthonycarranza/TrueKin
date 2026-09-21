@@ -67,9 +67,9 @@ export default function ProductCard({ product }) {
               )}
             </div>
           ) : (
-            <span className="tt-product-sub">{product.productType === 'hat' ? 'Hat · Adjustable fit' : 'Heat-pressed · Premium blank'}</span>
+            <span className="tt-product-sub">{product.productType === 'hat' ? 'Hat · Adjustable fit' : product.productType === 'sticker' ? 'Sticker · Durable full color' : 'Heat-pressed · Premium blank'}</span>
           )}
-          {product.productType === 'hat' && colors.length > 0 && <span className="tt-product-sub">Hat</span>}
+          {['hat', 'sticker'].includes(product.productType) && colors.length > 0 && <span className="tt-product-sub">{product.productType === 'hat' ? 'Hat' : 'Sticker'}</span>}
         </div>
       </div>
 

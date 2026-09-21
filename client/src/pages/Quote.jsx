@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   Check, Send, MessageSquare, Scissors, Palette, Package, MapPin,
   Clock, ShieldCheck, Users, Sparkles, ArrowRight,
+  FileText, PenTool,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../api/client';
@@ -155,6 +156,32 @@ export default function Quote() {
               <strong>1</strong>
               <span>Business day to respond</span>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ============  TWO QUOTE PATHS  ============ */}
+      <section className="tk-quote-paths" aria-labelledby="quote-paths-title">
+        <div className="container">
+          <header className="tk-quote-section-head">
+            <span className="tk-quote-eyebrow dark">Choose your route</span>
+            <h2 id="quote-paths-title" className="tk-quote-h2">A quick request or a full design brief.</h2>
+          </header>
+          <div className="tk-quote-path-grid">
+            <a href="#quote-form" className="tk-quote-path-card">
+              <span className="tk-quote-path-icon"><FileText size={24} /></span>
+              <span className="tk-quote-path-tag">Simple · conversational</span>
+              <h3>Quick quote request</h3>
+              <p>Tell us what you know. No finished artwork needed—we’ll reply by email and help shape the details with you.</p>
+              <strong>Use the quick form <ArrowRight size={15} /></strong>
+            </a>
+            <Link to="/quote/design" className="tk-quote-path-card is-studio">
+              <span className="tk-quote-path-icon"><PenTool size={24} /></span>
+              <span className="tk-quote-path-tag">Faster · production-ready</span>
+              <h3>Design it in the studio</h3>
+              <p>Import your artwork onto a T-shirt or sticker, explore the 3D proof, and see a live starting estimate before you send it.</p>
+              <strong>Open design studio <ArrowRight size={15} /></strong>
+            </Link>
           </div>
         </div>
       </section>
@@ -402,6 +429,17 @@ export default function Quote() {
           background: var(--bg, #f4f1ea);
           padding-bottom: 0;
         }
+
+        .tk-quote-paths { padding: 72px 0; background: #ece7dc; border-bottom: 1px solid #d9d3c2; }
+        .tk-quote-path-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .tk-quote-path-card { display: grid; grid-template-columns: auto 1fr; gap: 8px 15px; padding: 28px; color: var(--ink); text-decoration: none; background: #f8f5ee; border: 1.5px solid #d4cdbc; transition: transform .18s var(--ease), border-color .18s var(--ease), box-shadow .18s var(--ease); }
+        .tk-quote-path-card:hover { transform: translateY(-3px); border-color: var(--ink); box-shadow: 0 12px 28px #2f2b2312; }
+        .tk-quote-path-card.is-studio { background: #171713; color: #f4f1ea; border-color: #171713; }
+        .tk-quote-path-icon { grid-row: 1 / span 3; width: 48px; height: 48px; display: grid; place-items: center; border: 1px solid currentColor; }
+        .tk-quote-path-tag { font-family: var(--font-secondary); font-size: 9px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; opacity: .62; }
+        .tk-quote-path-card h3 { font-family: var(--font-display); font-size: 28px; font-weight: 400; text-transform: uppercase; letter-spacing: .03em; }
+        .tk-quote-path-card p { grid-column: 2; font-size: 13px; line-height: 1.65; opacity: .72; max-width: 520px; }
+        .tk-quote-path-card strong { grid-column: 2; display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; font-family: var(--font-secondary); font-size: 10px; letter-spacing: .13em; text-transform: uppercase; }
 
         /* ---------- HERO ---------- */
         .tk-quote-hero {
@@ -843,6 +881,12 @@ export default function Quote() {
           color: rgba(244,241,234,0.82);
         }
         .tk-quote-trust-item svg { color: var(--brand, #c8301f); }
+        @media (max-width: 720px) {
+          .tk-quote-paths { padding: 52px 0; }
+          .tk-quote-path-grid { grid-template-columns: 1fr; }
+          .tk-quote-path-card { padding: 22px 18px; }
+          .tk-quote-path-card h3 { font-size: 24px; }
+        }
       `}</style>
     </div>
   );

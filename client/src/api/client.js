@@ -40,6 +40,7 @@ export const api = {
 
   // Storefront content the admin edits (homepage hero cards)
   getHomeSettings: () => request('/settings/home'),
+  getStudioSettings: () => request('/settings/studio'),
 
   // Checkout
   createCheckoutSession: (body) => request('/checkout/create-session', { method: 'POST', body }),
@@ -66,9 +67,15 @@ export const api = {
 
   // Quotes (custom-order inquiries)
   submitQuote: (body) => request('/quotes', { method: 'POST', body }),
+  getQuoteEstimate: (body) => request('/quotes/estimate', { method: 'POST', body }),
+  submitStudioQuote: (formData) => request('/quotes', { method: 'POST', body: formData, isFormData: true }),
   adminGetQuotes: () => request('/quotes/admin/all'),
+  adminGetQuote: (id) => request(`/quotes/admin/${id}`),
   adminUpdateQuoteStatus: (id, status) =>
     request(`/quotes/admin/${id}/status`, { method: 'PUT', body: { status } }),
+  adminSaveQuoteBuilder: (id, formData) =>
+    request(`/quotes/admin/${id}/builder`, { method: 'PUT', body: formData, isFormData: true }),
+  adminSendQuoteProposal: (id) => request(`/quotes/admin/${id}/send`, { method: 'POST' }),
 
   // Reviews
   getReviews: (productId) => request(`/reviews/product/${productId}`),
@@ -113,4 +120,6 @@ export const api = {
 
   adminGetHomeSettings: () => request('/settings/admin/home'),
   adminSaveHomeSettings: (body) => request('/settings/admin/home', { method: 'PUT', body }),
+  adminGetStudioSettings: () => request('/settings/admin/studio'),
+  adminSaveStudioSettings: (body) => request('/settings/admin/studio', { method: 'PUT', body }),
 };

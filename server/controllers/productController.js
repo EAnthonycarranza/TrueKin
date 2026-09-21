@@ -1,11 +1,16 @@
 const Product = require('../models/Product');
+const SiteSettings = require('../models/SiteSettings');
 const sharp = require('sharp');
 const storage = require('../utils/storage');
 
 const PRODUCT_SIZES = {
   tshirt: ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'],
   hat: ['One Size'],
+  sticker: ['One Size'],
 };
+
+const PRODUCT_LABELS = { tshirt: 'T-shirt', hat: 'hat', sticker: 'sticker' };
+const PRODUCT_CATEGORIES = { tshirt: 'T-Shirt', hat: 'Hat', sticker: 'Sticker' };
 
 function invalidProduct(message) {
   const error = new Error(message);
@@ -26,11 +31,20 @@ function parseDesign(value) {
 
 function resolveProductType(value, design, fallback = 'tshirt') {
   const type = value || design?.productType || fallback;
-  if (!Object.hasOwn(PRODUCT_SIZES, type)) throw invalidProduct('Choose a T-shirt or hat product type');
+  if (!Object.hasOwn(PRODUCT_SIZES, type)) throw invalidProduct('Choose a T-shirt, hat, or sticker product type');
   if (design?.studio === 'truekin-unified' && design.productType !== type) {
     throw invalidProduct('The studio design and product type must match');
   }
   return type;
+}
+
+async function ensureCreationEnabled(productType, existingType = null) {
+  if (productType === existingType) return;
+  const settings = await SiteSettings.findOne({ key: 'site' }).select('studioTools');
+  const hatEnabled = settings?.studioTools?.hatEnabled ?? false;
+  const stickerEnabled = settings?.studioTools?.stickerEnabled ?? true;
+  if (productType === 'hat' && !hatEnabled) throw invalidProduct('Hat creation is currently disabled in Admin Settings');
+  if (productType === 'sticker' && !stickerEnabled) throw invalidProduct('Sticker creation is currently disabled in Admin Settings');
 }
 
 function parseSizes(value, productType) {
@@ -41,7 +55,7 @@ function parseSizes(value, productType) {
   const seen = new Map();
   for (const entry of entries) {
     if (!PRODUCT_SIZES[productType].includes(entry?.size)) {
-      throw invalidProduct(`Unsupported size for ${productType === 'hat' ? 'hats' : 'T-shirts'}`);
+      throw invalidProduct(`Unsupported size for ${PRODUCT_LABELS[productType]} products`);
     }
     const quantity = Number(entry.quantity || 0);
     if (!Number.isInteger(quantity) || quantity < 0) throw invalidProduct('Stock must be a non-negative whole number');
@@ -117,6 +131,7 @@ exports.createProduct = async (req, res) => {
     const { title, description, price, featured, active } = req.body;
     const design = parseDesign(req.body.designData);
     const productType = resolveProductType(req.body.productType, design);
+    await ensureCreationEnabled(productType);
     const parsedSizes = parseSizes(req.body.sizes || [], productType);
     const imageUrls = [];
 
@@ -139,7 +154,7 @@ exports.createProduct = async (req, res) => {
       price: Math.round(parseFloat(price) * 100),
       imageUrls,
       productType,
-      category: productType === 'hat' ? 'Hat' : 'T-Shirt',
+      category: PRODUCT_CATEGORIES[productType],
       designData: design ? JSON.stringify(design) : null,
       featured: featured === 'true' || featured === true,
       active: active === undefined ? true : active === 'true' || active === true,
@@ -167,8 +182,9 @@ exports.updateProduct = async (req, res) => {
 
     const design = parseDesign(req.body.designData === undefined ? product.designData : req.body.designData);
     const productType = resolveProductType(req.body.productType, design, product.productType || 'tshirt');
+    await ensureCreationEnabled(productType, product.productType || 'tshirt');
     product.productType = productType;
-    product.category = productType === 'hat' ? 'Hat' : 'T-Shirt';
+    product.category = PRODUCT_CATEGORIES[productType];
     if (req.body.designData !== undefined) product.designData = design ? JSON.stringify(design) : null;
 
     if (title) product.title = title;
@@ -298,8 +314,9 @@ exports.saveDesign = async (req, res) => {
 
     const design = parseDesign(req.body.designData === undefined ? product.designData : req.body.designData);
     const productType = resolveProductType(req.body.productType, design, product.productType || 'tshirt');
+    await ensureCreationEnabled(productType, product.productType || 'tshirt');
     product.productType = productType;
-    product.category = productType === 'hat' ? 'Hat' : 'T-Shirt';
+    product.category = PRODUCT_CATEGORIES[productType];
     product.sizes = req.body.sizes === undefined
       ? product.sizes.filter((entry) => PRODUCT_SIZES[productType].includes(entry.size))
       : parseSizes(req.body.sizes, productType);

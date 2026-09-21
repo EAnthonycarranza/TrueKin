@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   X, Save, ArrowLeft, Paintbrush, ChevronDown, ChevronUp,
-  Box, Shirt, Upload, Check, AlertTriangle, Info, Ruler,
+  Box, Shirt, Sticker, Upload, Check, AlertTriangle, Info, Ruler,
   Palette, Package, Sparkles, Users, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -13,7 +13,7 @@ import { ShieldMark } from '../../components/brand/Logo';
 import ImageCropModal from '../../components/ImageCropModal';
 
 const ALL_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
-const HAT_SIZES = ['One Size'];
+const ONE_SIZE = ['One Size'];
 
 function readDesign(value) {
   try { return typeof value === 'string' ? JSON.parse(value) : value; } catch { return null; }
@@ -46,6 +46,7 @@ function ProductEditForm({ id }) {
   });
   const [editorType, setEditorType] = useState('3d');
   const [productType, setProductType] = useState('tshirt');
+  const [studioTools, setStudioTools] = useState({ hatEnabled: false, stickerEnabled: true });
   const [availableColors, setAvailableColors] = useState([]);
   const [colorImages, setColorImages] = useState({});
   const [sizes, setSizes] = useState([]); // [{ size, quantity, unlimited, style: 'unisex' }]
@@ -62,7 +63,15 @@ function ProductEditForm({ id }) {
   const [draftDesignBlob, setDraftDesignBlob] = useState(null);
   const inventoryByType = useRef({});
   const isHat = productType === 'hat';
-  const supportedSizes = isHat ? HAT_SIZES : ALL_SIZES;
+  const isSticker = productType === 'sticker';
+  const supportedSizes = isHat || isSticker ? ONE_SIZE : ALL_SIZES;
+  const studioProductTypes = ['tshirt', ...(studioTools.stickerEnabled || isSticker ? ['sticker'] : []), ...(studioTools.hatEnabled || isHat ? ['hat'] : [])];
+
+  useEffect(() => {
+    api.getStudioSettings()
+      .then((data) => setStudioTools(data.studioTools || { hatEnabled: false, stickerEnabled: true }))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (isEditing) {
@@ -192,8 +201,8 @@ function ProductEditForm({ id }) {
   };
 
   const handleSaveDesign = async (blob, designState) => {
-    const nextType = designState.productType === 'hat' ? 'hat' : 'tshirt';
-    const nextSupportedSizes = nextType === 'hat' ? HAT_SIZES : ALL_SIZES;
+    const nextType = ['hat', 'sticker'].includes(designState.productType) ? designState.productType : 'tshirt';
+    const nextSupportedSizes = ['hat', 'sticker'].includes(nextType) ? ONE_SIZE : ALL_SIZES;
     const nextSizes = sizes.filter((s) => nextSupportedSizes.includes(s.size));
     setProductType(nextType);
     setEditorType('3d');
@@ -300,7 +309,7 @@ function ProductEditForm({ id }) {
     if (type === productType) return;
     inventoryByType.current[productType] = sizes;
     setProductType(type);
-    setSizes(inventoryByType.current[type] || (type === 'hat'
+    setSizes(inventoryByType.current[type] || (['hat', 'sticker'].includes(type)
       ? [{ size: 'One Size', style: 'unisex', quantity: 0, unlimited: false }]
       : []));
   };
@@ -341,13 +350,13 @@ function ProductEditForm({ id }) {
             </h1>
             <span className="rule rule-brand" aria-hidden />
             <p className="tk-pe-sub">
-              Build your next T-shirt or hat in one studio. Place artwork in 2D,
+              Build your next T-shirt or sticker in one studio. Place artwork in 2D,
               check every angle in 3D, and save the same design to your drop.
             </p>
           </div>
           <div className="tk-pe-hero-seal">
             <Users size={14} />
-            {isHat ? 'ADJUSTABLE HAT' : 'UNISEX T-SHIRT'}
+            {isHat ? 'ADJUSTABLE HAT' : isSticker ? 'DURABLE STICKER' : 'UNISEX T-SHIRT'}
           </div>
         </header>
 
@@ -363,16 +372,21 @@ function ProductEditForm({ id }) {
             <fieldset className="tk-product-type">
               <legend>Product type</legend>
               <div className="tk-editor-grid">
-                <button type="button" onClick={() => handleProductTypeChange('tshirt')} className={`tk-editor-card ${!isHat ? 'on' : ''}`} aria-pressed={!isHat}>
+                <button type="button" onClick={() => handleProductTypeChange('tshirt')} className={`tk-editor-card ${productType === 'tshirt' ? 'on' : ''}`} aria-pressed={productType === 'tshirt'}>
                   <Shirt size={26} />
                   <span className="tk-editor-info"><span className="tk-editor-name">T-Shirt</span><span className="tk-editor-desc">Unisex fit · front, back and sleeves</span></span>
-                  {!isHat && <Check size={18} />}
+                  {productType === 'tshirt' && <Check size={18} />}
                 </button>
-                <button type="button" onClick={() => handleProductTypeChange('hat')} className={`tk-editor-card ${isHat ? 'on' : ''}`} aria-pressed={isHat}>
-                  <Box size={26} />
-                  <span className="tk-editor-info"><span className="tk-editor-name">Hat</span><span className="tk-editor-desc">Adjustable fit · one size</span></span>
-                  {isHat && <Check size={18} />}
-                </button>
+                {(studioTools.stickerEnabled || isSticker) && <button type="button" onClick={() => handleProductTypeChange('sticker')} className={`tk-editor-card ${isSticker ? 'on' : ''}`} aria-pressed={isSticker}>
+                  <Sticker size={26} />
+                  <span className="tk-editor-info"><span className="tk-editor-name">Sticker</span><span className="tk-editor-desc">Full-color face · dimensional 3D proof</span></span>
+                  {isSticker && <Check size={18} />}
+                </button>}
+                {(studioTools.hatEnabled || isHat) && <button type="button" onClick={() => handleProductTypeChange('hat')} className={`tk-editor-card ${isHat ? 'on' : ''}`} aria-pressed={isHat}>
+                    <Box size={26} />
+                    <span className="tk-editor-info"><span className="tk-editor-name">Hat</span><span className="tk-editor-desc">Adjustable fit · one size</span></span>
+                    {isHat && <Check size={18} />}
+                  </button>}
               </div>
             </fieldset>
             <div className="tk-pe-grid-2">
@@ -410,11 +424,11 @@ function ProductEditForm({ id }) {
                 rows={4}
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
-                placeholder={isHat ? 'Describe the hat blank, material, closure, fit, and decoration method.' : 'Heat-pressed by hand on a Bella + Canvas 3001 unisex tee. 100% ringspun cotton. Pre-shrunk, side-seamed, built to last.'}
+                placeholder={isHat ? 'Describe the hat blank, material, closure, fit, and decoration method.' : isSticker ? 'Weather-resistant vinyl sticker with a clean-cut edge, rich color, and a durable finish made for bottles, cases, and everyday gear.' : 'Heat-pressed by hand on a Bella + Canvas 3001 unisex tee. 100% ringspun cotton. Pre-shrunk, side-seamed, built to last.'}
                 required
               />
               <span className="tk-field-hint">
-                {isHat ? 'Include the hat style, material, closure, and how the design is applied.' : 'Name the blank (Bella + Canvas 3001 / Gildan 5000 / Comfort Colors 1717) and the press story.'}
+                {isHat ? 'Include the hat style, material, closure, and how the design is applied.' : isSticker ? 'Include the finished dimensions, stock, finish, and whether the sticker is indoor or weather-resistant.' : 'Name the blank (Bella + Canvas 3001 / Gildan 5000 / Comfort Colors 1717) and the press story.'}
               </span>
             </div>
             <div className="tk-toggles">
@@ -516,7 +530,7 @@ function ProductEditForm({ id }) {
             <SectionHead
               num="03"
               title="The Cut & Inventory"
-              sub={isHat ? 'Adjustable fit · one-size inventory' : 'One unisex fit · one inventory line'}
+              sub={isHat ? 'Adjustable fit · one-size inventory' : isSticker ? 'Finished pieces · one inventory line' : 'One unisex fit · one inventory line'}
               icon={<Ruler size={15} />}
             />
 
@@ -525,9 +539,9 @@ function ProductEditForm({ id }) {
                 <Users size={20} />
               </div>
               <div>
-                <strong>{isHat ? 'One adjustable size.' : 'Unisex fit only.'}</strong>
+                <strong>{isHat ? 'One adjustable size.' : isSticker ? 'One finished sticker format.' : 'Unisex fit only.'}</strong>
                 <p>
-                  {isHat ? 'Stock your adjustable hats in One Size. Set the number of blanks available or enable made-to-order inventory.' : "Truekin tees share one unisex fit. Enable the sizes you'll stock and set quantities for each."}
+                  {isHat ? 'Stock your adjustable hats in One Size. Set the number of blanks available or enable made-to-order inventory.' : isSticker ? 'Track finished sticker stock in One Size, or enable made-to-order inventory for print-on-demand runs.' : "Truekin tees share one unisex fit. Enable the sizes you'll stock and set quantities for each."}
                 </p>
               </div>
               <div className="tk-unisex-banner-stat">
@@ -581,7 +595,7 @@ function ProductEditForm({ id }) {
                     )
                   }
                 >
-                  {isHat ? 'Enable One Size' : 'Enable All Sizes'}
+                  {isHat || isSticker ? 'Enable One Size' : 'Enable All Sizes'}
                 </button>
               </div>
             ) : (
@@ -599,7 +613,7 @@ function ProductEditForm({ id }) {
                     <div key={sizeName} className="tk-inv-row">
                       <span className="tk-inv-size">{sizeName}</span>
                       <span className="tk-inv-fit">
-                        <Users size={12} /> {isHat ? 'Adjustable' : 'Unisex'}
+                        <Users size={12} /> {isHat ? 'Adjustable' : isSticker ? 'Finished piece' : 'Unisex'}
                       </span>
                       <div>
                         <input
@@ -660,7 +674,7 @@ function ProductEditForm({ id }) {
                       );
                     }}
                   >
-                    {isHat ? 'Enable One Size' : 'Enable all sizes'}
+                    {isHat || isSticker ? 'Enable One Size' : 'Enable all sizes'}
                   </button>
                 </div>
               </div>
@@ -687,7 +701,7 @@ function ProductEditForm({ id }) {
                 <SectionHead
                   num="04"
                   title="Truekin Studio"
-                  sub={designData ? 'One design · edit in 2D, preview in 3D' : 'T-shirts and hats · one connected workspace'}
+                  sub={designData ? 'One design · edit in 2D, preview in 3D' : 'T-shirts and stickers · one connected workspace'}
                   icon={<Paintbrush size={15} />}
                   inline
                 />
@@ -726,6 +740,7 @@ function ProductEditForm({ id }) {
                     onSnapshot={handleSnapshot}
                     saving={savingDesign}
                     availableColors={availableColors}
+                    availableProductTypes={studioProductTypes}
                     onColorways={isEditing ? handleColorways : undefined}
                   />
                 </Suspense>
@@ -848,7 +863,7 @@ function ProductEditForm({ id }) {
                   {isEditing ? 'Update' : 'Release'} the drop
                 </span>
                 <span className="tk-submit-meta">
-                  {isHat ? 'Adjustable hat' : 'Unisex T-shirt'} · {availableColors.length || 0} colors · {sizes.length} {sizes.length === 1 ? 'size' : 'sizes'}
+                  {isHat ? 'Adjustable hat' : isSticker ? 'Sticker' : 'Unisex T-shirt'} · {availableColors.length || 0} colors · {sizes.length} {sizes.length === 1 ? 'size' : 'sizes'}
                 </span>
               </div>
             </div>

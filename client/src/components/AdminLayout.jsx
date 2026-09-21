@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import {
-  LayoutDashboard, Shirt, ClipboardList, PlusCircle, Settings, ArrowUpRight, MapPin, Home,
+  LayoutDashboard, Shirt, ClipboardList, PlusCircle, Settings, ArrowUpRight, MapPin, Home, FileText,
 } from 'lucide-react';
 import { ShieldMark, Wordmark } from './brand/Logo';
 
@@ -9,8 +9,10 @@ const navItems = [
   { to: '/admin/products', label: 'Products', icon: Shirt },
   { to: '/admin/products/new', label: 'New Drop', icon: PlusCircle },
   { to: '/admin/orders', label: 'Orders', icon: ClipboardList },
+  { to: '/admin/quotes', label: 'Custom Quotes', icon: FileText },
   { to: '/admin/pickup-locations', label: 'Pickup Locations', icon: MapPin },
   { to: '/admin/homepage', label: 'Storefront', icon: Home },
+  { to: '/admin/settings', label: 'Settings', icon: Settings },
 ];
 
 export default function AdminLayout({ children, title, description, action }) {
@@ -65,10 +67,6 @@ export default function AdminLayout({ children, title, description, action }) {
           <NavLink to="/" className="admin-nav-link">
             <ArrowUpRight size={17} />
             <span>View Store</span>
-          </NavLink>
-          <NavLink to="#" className="admin-nav-link" onClick={(e) => e.preventDefault()}>
-            <Settings size={17} />
-            <span>Settings</span>
           </NavLink>
         </div>
       </aside>

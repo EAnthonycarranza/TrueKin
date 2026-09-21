@@ -23,6 +23,10 @@ const heroCardSchema = new mongoose.Schema({
 const siteSettingsSchema = new mongoose.Schema({
   key: { type: String, default: 'site', unique: true, index: true },
   heroCards: { type: [heroCardSchema], default: [] },
+  studioTools: {
+    hatEnabled: { type: Boolean, default: false },
+    stickerEnabled: { type: Boolean, default: true },
+  },
 }, { timestamps: true });
 
 module.exports = mongoose.model('SiteSettings', siteSettingsSchema);

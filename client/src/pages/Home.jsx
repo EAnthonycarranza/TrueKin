@@ -410,6 +410,9 @@ export default function Home() {
                 <li><Check size={14} /> Bulk-order planning + pricing</li>
                 <li><Check size={14} /> Turnaround in 7–14 days after approval</li>
               </ul>
+              <Link to="/quote/design" className="btn btn-secondary" style={{ marginTop: 22 }}>
+                Build a studio proof for a faster quote <ArrowRight size={15} />
+              </Link>
             </div>
 
             <div className="home-quote-card">
