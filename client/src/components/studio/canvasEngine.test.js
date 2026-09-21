@@ -230,6 +230,35 @@ test('multi-selection duplicates independent members and persists every lock', a
   assert.ok(engine.canvas.getObjects().every(item => item.studioLocked && item.lockScalingX));
 });
 
+test('curved text remains editable through spacing changes, save, reopen, and undo', async t => {
+  const { engine } = await createEngine(t);
+  engine.addText('TRUEKIN');
+  const originalCenter = engine.selected.getCenterPoint();
+  engine.update({ studioCurve: 66 });
+  assert.equal(engine.selected.studioCurve, 66);
+  assert.ok(engine.selected.path, 'arched text has an editable vector path');
+  assert.ok(engine.selected.path.path[1][2] < 0, 'positive values arch upward');
+  assert.ok(engine.selected.getCenterPoint().distanceFrom(originalCenter) < 0.01);
+  const originalPathWidth = engine.selected.path.width;
+  engine.update({ charSpacing: 180 });
+  assert.ok(engine.selected.path.width > originalPathWidth, 'letter spacing rebuilds the curve around the text');
+  const saved = engine.getDocument();
+  assert.equal(saved.surfaces.front.objects[0].studioCurve, 66);
+  assert.ok(saved.surfaces.front.objects[0].path);
+  assert.ok(saved.prints.front?.startsWith('data:image/png;base64,'));
+  const { engine: reopened } = await createEngine(t, saved);
+  assert.equal(reopened.canvas.getObjects()[0].studioCurve, 66);
+  assert.ok(reopened.canvas.getObjects()[0].path);
+  reopened.canvas.setActiveObject(reopened.canvas.getObjects()[0]);
+  reopened.update({ studioCurve: -60 });
+  assert.ok(reopened.selected.path.path[1][2] > 0, 'negative values arch downward');
+  await reopened.history('undo');
+  assert.equal(reopened.canvas.getObjects()[0].studioCurve, 66);
+  reopened.canvas.setActiveObject(reopened.canvas.getObjects()[0]);
+  reopened.update({ studioCurve: 0 });
+  assert.equal(reopened.selected.path, undefined, 'straight text has no path');
+});
+
 test('saving a transformed multi-selection preserves canvas-space positions without disrupting selection', async t => {
   const { engine } = await createEngine(t);
   engine.addShape('circle', '#111111'); engine.command('nudge', [-45, 0]);

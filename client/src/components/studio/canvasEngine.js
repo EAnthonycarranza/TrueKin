@@ -4,9 +4,31 @@ import { loadFabricAssetImage, loadFabricImageFromFile } from '../designer/desig
 import { createSnapSession, resetSnapSession, solveMoveSnap, solveAngleSnap } from './smartSnapping';
 import { QUICK_POSITIONS, getQuickPosition, positionOffset, safePrintRect } from './quickPositioning';
 
-const PROPS = ['studioId', 'studioName', 'studioLocked', 'assetTone', 'assetAltSrc', 'inkLocked'];
+const PROPS = ['studioId', 'studioName', 'studioLocked', 'assetTone', 'assetAltSrc', 'inkLocked', 'studioCurve'];
 const uid = () => crypto.randomUUID();
 const isText = o => ['textbox', 'i-text', 'text'].includes(o?.type?.toLowerCase());
+
+function shapeText(object, requestedCurve, center = object.getCenterPoint()) {
+  const curve = object.text?.includes('\n') ? 0 : Math.max(-100, Math.min(100, Math.round(Number(requestedCurve) || 0)));
+  if (curve) {
+    // Measure the uncurved line, then give it a little breathing room along the arc.
+    const measure = new fabric.Text(object.text, {
+      fontFamily: object.fontFamily, fontSize: object.fontSize, fontWeight: object.fontWeight,
+      fontStyle: object.fontStyle, charSpacing: object.charSpacing,
+    });
+    const width = Math.max(120, measure.width * 1.12);
+    measure.dispose();
+    const rise = -curve / 100 * width * 0.42;
+    object.set({
+      path: new fabric.Path(`M 0 0 C ${width * 0.25} ${rise} ${width * 0.75} ${rise} ${width} 0`, { visible: false, fill: null, stroke: null }),
+      textAlign: 'center', studioCurve: curve,
+    });
+  } else {
+    object.set({ path: undefined, studioCurve: 0 });
+  }
+  object.setPositionByOrigin(center, 'center', 'center');
+  object.setCoords();
+}
 
 function styleObject(o) {
   o.set({ cornerColor: '#fff', cornerStrokeColor: '#c8301f', borderColor: '#c8301f', cornerStyle: 'circle',
@@ -71,7 +93,15 @@ export default class CanvasEngine {
     this.canvas.on('selection:updated', selection);
     this.canvas.on('selection:cleared', selection);
     this.canvas.on('object:modified', () => { this.finishSnapping(); this.commit(); });
-    this.canvas.on('text:changed', () => { clearTimeout(this.textTimer); this.textTimer = setTimeout(() => this.commit(), 220); });
+    this.canvas.on('text:changed', ({ target }) => {
+      if (isText(target) && target.studioCurve) {
+        shapeText(target, target.studioCurve);
+        this.canvas.requestRenderAll();
+        this.schedulePreview();
+      }
+      clearTimeout(this.textTimer);
+      this.textTimer = setTimeout(() => this.commit(), 220);
+    });
     this.canvas.on('mouse:down', () => {
       this.clearSnapping();
       if (!this.canvas.getActiveObject()?.isEditing) this.canvas.upperCanvasEl.focus({ preventScroll: true });
@@ -305,6 +335,7 @@ export default class CanvasEngine {
       layers: this.canvas.getObjects().map(item => ({ id: item.studioId, name: item.studioName, type: isText(item) ? 'text' : item.type, locked: !!item.studioLocked, hidden: item.visible === false })).reverse(),
       selected: o ? { id: o.studioId, type: isText(o) ? 'text' : o.type, text: o.text || '', name: o.studioName,
         fontFamily: o.fontFamily || 'Oswald', fontSize: o.fontSize || 48,
+        curve: isText(o) ? (o.studioCurve || 0) : 0, charSpacing: isText(o) ? (o.charSpacing || 0) : 0,
         fill: typeof o.fill === 'string' ? o.fill : '#181818', opacity: Math.round((o.opacity ?? 1) * 100),
         angle: Math.round(o.angle || 0), bold: o.fontWeight === 'bold', italic: o.fontStyle === 'italic',
         locked: !!o.studioLocked, width: Math.round((box?.width || 0) / rect.width * 100),
@@ -331,7 +362,7 @@ export default class CanvasEngine {
   }
 
   addText(text = 'YOUR WORDS', font = 'Oswald', fill = '#181818') {
-    this.add(new fabric.IText(text, { fontFamily: font, fontSize: 72, fill, fontWeight: 'bold', textAlign: 'center' }), text);
+    this.add(new fabric.IText(text, { fontFamily: font, fontSize: 72, fill, fontWeight: 'bold', textAlign: 'center', studioCurve: 0 }), text);
   }
 
   async addImage(source, name) {
@@ -367,7 +398,11 @@ export default class CanvasEngine {
     const object = this.selected;
     if (!object || object.studioLocked) return;
     this.clearSnapping();
+    const center = isText(object) ? object.getCenterPoint() : null;
     object.set(values);
+    if (isText(object) && (values.studioCurve !== undefined || (object.studioCurve && ['text', 'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'charSpacing'].some(key => values[key] !== undefined)))) {
+      shapeText(object, values.studioCurve ?? object.studioCurve, center);
+    }
     if (object.type === 'activeselection' && values.opacity !== undefined) {
       object.set({ opacity: 1 });
       object.getObjects().forEach(item => item.set({ opacity: values.opacity }));

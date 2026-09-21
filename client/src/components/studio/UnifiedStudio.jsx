@@ -1,8 +1,9 @@
 import { createElement, lazy, Suspense, useCallback, useEffect, useId, useRef, useState } from 'react';
-import { ArrowDownToLine, Box, Camera, Check, ChevronDown, Download, FileUp, Grid2X2, Image as ImageIcon, Layers, LoaderCircle, Magnet, MousePointer2, PanelLeftClose, Plus, Redo2, Save, Shapes, Shirt, Sparkles, Type, Undo2, Upload, X } from 'lucide-react';
+import { ArrowDownToLine, Box, Camera, Check, ChevronDown, Download, FileUp, Grid2X2, Image as ImageIcon, Layers, LoaderCircle, Magnet, MousePointer2, PanelLeftClose, PanelLeftOpen, Plus, Redo2, Save, Shapes, Shirt, Sparkles, Type, Undo2, Upload, X } from 'lucide-react';
 import StudioCanvas from './StudioCanvas';
 import StudioTools from './StudioTools';
 import StudioInspector from './StudioInspector';
+import SelectionToolbar from './SelectionToolbar';
 import QuickPosition from './QuickPosition';
 import { STUDIO_ID, SURFACES, emptyDocument, normalizeDocument } from './studioDocument';
 import { canvasBlob, productSnapshot } from './mockups';
@@ -50,15 +51,15 @@ function readDraft(key, type) {
   } catch { return null; }
 }
 
-export default function UnifiedStudio({ designData, productType, onProductTypeChange, onDesignChange, draftKey = 'playground', onSave, onSnapshot, onColorways, availableColors = NO_COLORS, availableProductTypes = ALL_PRODUCT_TYPES, saveLabel = 'Save design', saving = false }) {
+export default function UnifiedStudio({ designData, productType, onProductTypeChange, onDesignChange, draftKey = 'playground', onSave, onSnapshot, onColorways, availableColors = NO_COLORS, availableProductTypes = ALL_PRODUCT_TYPES, saveLabel = 'Save design', saving = false, compactTools = false }) {
   const snapHelpId = useId();
   const [start] = useState(() => initialState(designData, productType));
   const [initialDocument, setInitialDocument] = useState(start.document);
   const [state, setState] = useState({ document: start.document, loading: true, layers: [], selected: null, canUndo: false, canRedo: false });
   const [view, setView] = useState('front');
   const [tool, setTool] = useState('product');
-  const [panelOpen, setPanelOpen] = useState(false);
-  const [mode, setMode] = useState('split');
+  const [panelOpen, setPanelOpen] = useState(() => !compactTools && !window.matchMedia('(max-width:760px)').matches);
+  const [mode, setMode] = useState(compactTools ? '2d' : 'split');
   const [guides, setGuides] = useState(true);
   const [snap, setSnap] = useState(true);
   const [autoRotate, setAutoRotate] = useState(false);
@@ -74,6 +75,7 @@ export default function UnifiedStudio({ designData, productType, onProductTypeCh
   const draftTimer = useRef(null), revision = useRef(0), dirtyRef = useRef(false);
   const previousPanelOpen = useRef(false);
   const phone = usePhoneLayout(studioRoot);
+  const previousPhone = useRef(phone);
   const type = initialDocument.productType;
   const productOptions = [...new Set([...availableProductTypes, type])];
   const displayMode = phone && mode === 'split' ? '2d' : mode;
@@ -81,6 +83,11 @@ export default function UnifiedStudio({ designData, productType, onProductTypeCh
   const color = state.document.garmentColor;
   const engine = () => canvasRef.current?.getEngine();
   const reportError = useCallback(error => setNotice({ kind: 'error', text: error?.message || 'Something went wrong. Please try again.' }), []);
+
+  useEffect(() => {
+    if (phone && !previousPhone.current) setPanelOpen(false);
+    previousPhone.current = phone;
+  }, [phone]);
 
   useEffect(() => {
     const closedPanel = previousPanelOpen.current && !panelOpen;
@@ -308,13 +315,13 @@ export default function UnifiedStudio({ designData, productType, onProductTypeCh
     </header>
     {notice && <div className={`us-notice is-${notice.kind}`} role={notice.kind === 'error' ? 'alert' : 'status'}><span>{notice.text}</span>{state.error && <button type="button" className="us-button" disabled={state.loading} onClick={() => { setView('front'); engine()?.retry(); }}>Retry artwork</button>}<button type="button" className="us-icon-button" aria-label="Dismiss message" disabled={state.error} onClick={() => setNotice(null)}><X size={15} /></button></div>}
     {draft && <div className="us-draft-banner"><div><strong>A device draft is available</strong><span>{new Date(draft.updatedAt).toLocaleString()} · {productName(type)}</span></div><button type="button" className="us-button" disabled={disabled} onClick={() => { const doc = normalizeDocument(draft.document); replaceDocument(doc); setDraft(null); setDirty(true); dirtyRef.current = true; setStatus('Device draft restored'); }}>Restore</button><button type="button" className="us-icon-button" aria-label="Dismiss available draft" onClick={() => setDraft(null)}><X size={16} /></button></div>}
-    <div className={`us-body ${panelOpen ? 'has-mobile-panel' : ''}`}>
-      <nav className="us-tool-rail" aria-label="Design tools">{TOOLS.map(([id, Icon, label]) => <button type="button" key={id} className={tool === id ? 'is-active' : ''} aria-pressed={tool === id} aria-controls="studio-toolkit" onClick={() => selectTool(id)}>{createElement(Icon, { size: 21 })}<span>{label}</span></button>)}</nav>
+    <div className={`us-body ${panelOpen ? 'has-mobile-panel' : 'is-panel-collapsed'}`}>
+      <nav className="us-tool-rail" aria-label="Design tools">{TOOLS.map(([id, Icon, label]) => <button type="button" key={id} className={tool === id && panelOpen ? 'is-active' : ''} aria-pressed={tool === id && panelOpen} aria-controls="studio-toolkit" aria-expanded={panelOpen && tool === id} onClick={() => selectTool(id)}>{createElement(Icon, { size: 21 })}<span>{label}</span></button>)}</nav>
       <aside className="us-tool-panel" id="studio-toolkit"><StudioTools tool={tool} productType={type} availableProductTypes={productOptions} color={color} onProductChange={value => { if (onProductTypeChange?.(value) !== false) switchProduct(value); }} onColorChange={value => engine()?.setColor(value)} onAddText={addText} onAddImage={addImage} onAddShape={(shape, ink) => { engine()?.addDefinedShape(shape, ink); if (phone) setPanelOpen(false); if (displayMode === '3d') setMode('2d'); }} layers={state.layers} selected={state.selected} onCommand={command} onClose={() => setPanelOpen(false)} busy={disabled} /></aside>
       <div className="us-workspace">
-        <div className="us-workspace-bar"><div className="us-surfaces" aria-label="Print location">{SURFACES[type].map(s => <button type="button" key={s.id} disabled={disabled} aria-pressed={view === s.id} className={view === s.id ? 'is-active' : ''} onClick={() => { setView(s.id); setAutoRotate(false); }}>{s.label}</button>)}</div><div className="us-view-modes" aria-label="Studio view">{[['2d', MousePointer2, 'Edit'], ['split', PanelLeftClose, 'Split'], ['3d', Box, '3D']].filter(([id]) => !phone || id !== 'split').map(([id, Icon, label]) => <button type="button" key={id} onClick={() => setMode(id)} aria-pressed={displayMode === id} className={displayMode === id ? 'is-active' : ''}>{createElement(Icon, { size: 15 })}<span>{label}</span></button>)}</div></div>
+        <div className="us-workspace-bar"><button type="button" className="us-tool-toggle" aria-controls="studio-toolkit" aria-expanded={panelOpen} onClick={() => setPanelOpen((open) => !open)}>{panelOpen ? <PanelLeftClose size={15} /> : <PanelLeftOpen size={15} />}{panelOpen ? 'Hide tools' : 'Show tools'}</button><div className="us-surfaces" aria-label="Print location">{SURFACES[type].map(s => <button type="button" key={s.id} disabled={disabled} aria-pressed={view === s.id} className={view === s.id ? 'is-active' : ''} onClick={() => { setView(s.id); setAutoRotate(false); }}>{s.label}</button>)}</div><div className="us-view-modes" aria-label="Studio view">{[['2d', MousePointer2, 'Edit'], ['split', PanelLeftClose, 'Split'], ['3d', Box, '3D']].filter(([id]) => !phone || id !== 'split').map(([id, Icon, label]) => <button type="button" key={id} onClick={() => setMode(id)} aria-pressed={displayMode === id} className={displayMode === id ? 'is-active' : ''}>{createElement(Icon, { size: 15 })}<span>{label}</span></button>)}</div></div>
         <div className={`us-stages is-${displayMode}`}>
-          <div className={`us-stage us-edit-stage ${displayMode === '3d' ? 'is-hidden' : ''}`} aria-hidden={displayMode === '3d'}><div className="us-stage-label"><span><MousePointer2 size={12} /> EDIT YOUR DESIGN</span><span>{type === 'tshirt' ? 'Classic tee' : productName(type)}</span></div><div className="us-canvas-wrap"><StudioCanvas ref={canvasRef} initialDocument={initialDocument} view={view} color={color} guides={guides} snap={snap} onChange={handleChange} onError={reportError} /></div><p className="us-stage-caption">Tap to select · drag to move · use handles to resize</p></div>
+          <div className={`us-stage us-edit-stage ${displayMode === '3d' ? 'is-hidden' : ''}`} aria-hidden={displayMode === '3d'}><div className="us-stage-label"><span><MousePointer2 size={12} /> EDIT YOUR DESIGN</span><span>{type === 'tshirt' ? 'Classic tee' : productName(type)}</span></div><SelectionToolbar key={state.selected?.id || 'none'} selected={state.selected} disabled={disabled} onCommand={command} /><div className="us-canvas-wrap"><StudioCanvas ref={canvasRef} initialDocument={initialDocument} view={view} color={color} guides={guides} snap={snap} onChange={handleChange} onError={reportError} /></div><p className="us-stage-caption">Tap to select · drag to move · use handles to resize</p></div>
           {displayMode !== '2d' && <div className="us-stage us-3d-stage"><div className="us-stage-label"><span><Box size={12} /> LIVE PREVIEW</span><span className="us-live-dot">Synced</span></div><div className="us-viewer-wrap"><Suspense fallback={<div className="us-viewer-loading"><LoaderCircle size={22} className="us-spin" />Loading 3D preview…</div>}><ProductViewer ref={viewerRef} productType={type} color={color} prints={state.document.prints} view={view} autoRotate={autoRotate} /></Suspense></div><p className="us-stage-caption">Drag to rotate · pinch or scroll to zoom</p></div>}
           {(!!busy || state.loading) && <div className="us-busy" role="status"><LoaderCircle size={16} className="us-spin" />{busy || 'Preparing your design'}</div>}
         </div>

@@ -39,6 +39,7 @@ export default function StudioInspector({ selected, onUpdate, onCommand }) {
   const locked = !!selected.locked;
   const text = selected.type === 'text';
   const image = selected.type === 'image';
+  const multilineText = text && selected.text.includes('\n');
   const updateNumber = (event, key, min, max, divisor = 1) => {
     const value = event.target.valueAsNumber;
     if (Number.isFinite(value)) onUpdate({ [key]: Math.min(max, Math.max(min, value)) / divisor });
@@ -89,6 +90,25 @@ export default function StudioInspector({ selected, onUpdate, onCommand }) {
               <button type="button" className="us-icon-button" aria-label="Bold text" title="Bold" aria-pressed={selected.bold} disabled={locked} onClick={() => onUpdate({ fontWeight: selected.bold ? 'normal' : 'bold' })}><Bold size={18} aria-hidden="true" /></button>
               <button type="button" className="us-icon-button" aria-label="Italic text" title="Italic" aria-pressed={selected.italic} disabled={locked} onClick={() => onUpdate({ fontStyle: selected.italic ? 'normal' : 'italic' })}><Italic size={18} aria-hidden="true" /></button>
             </div>
+          </div>
+          <div className="us-text-shape">
+            <span className="us-label">Text shape</span>
+            <div className="us-curve-presets" role="group" aria-label="Text shape presets">
+              <button type="button" aria-pressed={selected.curve === 0} disabled={locked} onClick={() => onUpdate({ studioCurve: 0 })}>Straight</button>
+              <button type="button" aria-pressed={selected.curve > 0} disabled={locked || multilineText} onClick={() => onUpdate({ studioCurve: 60 })}>Arch up</button>
+              <button type="button" aria-pressed={selected.curve < 0} disabled={locked || multilineText} onClick={() => onUpdate({ studioCurve: -60 })}>Arch down</button>
+            </div>
+            <div className="us-curve-controls">
+              <div className="us-field">
+                <div className="us-field-row"><label className="us-label" htmlFor={`${prefix}-curve`}>Curve</label><output htmlFor={`${prefix}-curve`}>{selected.curve}</output></div>
+                <input id={`${prefix}-curve`} type="range" min={-100} max={100} step={1} value={selected.curve} disabled={locked || multilineText} onChange={event => updateNumber(event, 'studioCurve', -100, 100)} />
+              </div>
+              <div className="us-field">
+                <div className="us-field-row"><label className="us-label" htmlFor={`${prefix}-spacing`}>Letter spacing</label><output htmlFor={`${prefix}-spacing`}>{selected.charSpacing}</output></div>
+                <input id={`${prefix}-spacing`} type="range" min={-100} max={300} step={5} value={selected.charSpacing} disabled={locked} onChange={event => updateNumber(event, 'charSpacing', -100, 300)} />
+              </div>
+            </div>
+            <small>{multilineText ? 'To curve words, put them on a single text line or in separate text layers.' : 'Use a single line for the cleanest arch. Negative values curve down.'}</small>
           </div>
         </>
       )}
