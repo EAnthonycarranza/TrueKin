@@ -2,11 +2,16 @@
 // node --import ./client/src/components/studio/canvas-test-register.mjs --test ./client/src/components/studio/canvasEngine.test.js
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { setImmediate } from 'node:timers/promises';
 import { createCanvas, loadImage } from 'canvas';
 import * as fabric from 'fabric/node';
+import * as THREE from 'three';
 import CanvasEngine from './canvasEngine.js';
 import { BOARD, emptyDocument, normalizeDocument } from './studioDocument.js';
+import { computeShirtLayout } from '../shirt3d/shirtLayout.js';
+import { PRINT_DEPTH } from '../shirt3d/printArea.js';
+import { createShirtPrintGeometry, SHIRT_PRINT_LIFT } from './shirtPrintGeometry.js';
 
 async function createEngine(t, document = emptyDocument()) {
   const changes = [], errors = [], snaps = [];
@@ -300,6 +305,80 @@ test('curved lettering stays inside the printable crop used by both previews', a
   clippedDraft.surfaces.front.objects[0].top = rect.top;
   const { engine: repaired } = await createEngine(t, clippedDraft);
   assert.equal(await outsideInk(repaired.canvas.getObjects()[0]), 0, 'an older cropped draft is repaired on load');
+});
+
+function shirtGeometryFromModel() {
+  const bytes = readFileSync(new URL('../../../public/models/shirt_baked_collapsed.glb', import.meta.url));
+  const jsonLength = bytes.readUInt32LE(12);
+  const model = JSON.parse(bytes.subarray(20, 20 + jsonLength).toString());
+  const binaryStart = 28 + jsonLength;
+  const attribute = (id, components) => {
+    const accessor = model.accessors[id];
+    const view = model.bufferViews[accessor.bufferView];
+    const ArrayType = accessor.componentType === 5126 ? Float32Array : Uint16Array;
+    return new THREE.BufferAttribute(new ArrayType(
+      bytes.buffer, bytes.byteOffset + binaryStart + (view.byteOffset || 0) + (accessor.byteOffset || 0),
+      accessor.count * components,
+    ), components);
+  };
+  const primitive = model.meshes[0].primitives[0];
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', attribute(primitive.attributes.POSITION, 3));
+  geometry.setAttribute('normal', attribute(primitive.attributes.NORMAL, 3));
+  geometry.setIndex(attribute(primitive.indices, 1));
+  return geometry;
+}
+
+function frontmostZAt(geometry, x, y) {
+  const positions = geometry.getAttribute('position');
+  const indices = geometry.index;
+  const count = indices?.count || positions.count;
+  let highest = -Infinity;
+  for (let i = 0; i < count; i += 3) {
+    const a = indices ? indices.getX(i) : i;
+    const b = indices ? indices.getX(i + 1) : i + 1;
+    const c = indices ? indices.getX(i + 2) : i + 2;
+    const ax = positions.getX(a), ay = positions.getY(a);
+    const bx = positions.getX(b), by = positions.getY(b);
+    const cx = positions.getX(c), cy = positions.getY(c);
+    const denominator = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
+    if (Math.abs(denominator) < 1e-12) continue;
+    const u = ((by - cy) * (x - cx) + (cx - bx) * (y - cy)) / denominator;
+    const v = ((cy - ay) * (x - cx) + (ax - cx) * (y - cy)) / denominator;
+    if (u < -1e-6 || v < -1e-6 || u + v > 1.000001) continue;
+    highest = Math.max(highest, u * positions.getZ(a) + v * positions.getZ(b) + (1 - u - v) * positions.getZ(c));
+  }
+  return highest;
+}
+
+test('arch-up 100 ink projects in front of the actual 3D shirt across the whole phrase', async t => {
+  const { engine } = await createEngine(t);
+  engine.addText('STAND TRUE. STAY LOYAL.');
+  engine.update({ studioCurve: 100 });
+  const print = await decodePng(engine.getDocument().prints.front);
+  const shirt = shirtGeometryFromModel();
+  const placement = computeShirtLayout(shirt).front;
+  const decal = createShirtPrintGeometry(shirt, placement, PRINT_DEPTH);
+  t.after(() => { decal.dispose(); shirt.dispose(); });
+
+  const bands = [[], [], []];
+  for (let y = 0; y < print.height; y += 12) for (let x = 0; x < print.width; x += 12) {
+    if (print.pixel(x, y)[3] < 180) continue;
+    const fraction = x / print.width;
+    bands[fraction < 0.4 ? 0 : fraction < 0.6 ? 1 : 2].push({ x, y });
+  }
+  for (const [band, samples] of bands.entries()) {
+    assert.ok(samples.length > 0, `the 100-curve texture has ink in band ${band}`);
+    for (let i = 0; i < 5; i += 1) {
+      const sample = samples[Math.floor((i + 0.5) * samples.length / 5)];
+      const x = placement.position[0] + (sample.x / print.width - 0.5) * placement.size[0];
+      const y = placement.position[1] + (0.5 - sample.y / print.height) * placement.size[1];
+      const fabricZ = frontmostZAt(shirt, x, y);
+      const inkZ = frontmostZAt(decal, x, y);
+      assert.ok(Number.isFinite(fabricZ) && Number.isFinite(inkZ), `ink in band ${band} lands on the shirt`);
+      assert.ok(inkZ - fabricZ >= SHIRT_PRINT_LIFT * 0.9, `ink in band ${band} clears the shirt depth buffer`);
+    }
+  }
 });
 
 test('saving a transformed multi-selection preserves canvas-space positions without disrupting selection', async t => {

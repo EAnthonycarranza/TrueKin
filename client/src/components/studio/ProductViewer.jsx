@@ -1,11 +1,12 @@
 import { Component, Suspense, forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { ContactShadows, Decal, OrbitControls, useGLTF } from '@react-three/drei';
+import { ContactShadows, OrbitControls, useGLTF } from '@react-three/drei';
 import { Box, RotateCcw } from 'lucide-react';
 import * as THREE from 'three';
 import { MODEL_PATH, computeShirtLayout } from '../shirt3d/shirtLayout';
 import { PRINT_DEPTH, SLEEVE_PRINT_DEPTH } from '../shirt3d/printArea';
 import { createBrimEdgeGeometry, createBrimGeometry, createBrimStitchGeometry, createCrownGeometry, createCrownLiningGeometry, createCrownRimGeometry, createSweatbandGeometry, createFabricTexture, createHatPrintGeometry, createSeamGeometry, crownPoint } from './hatGeometry';
+import { createShirtPrintGeometry } from './shirtPrintGeometry';
 
 const ANGLES = { front: 0, back: Math.PI, left: Math.PI / 2, right: -Math.PI / 2 };
 const overlayStyle = { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, padding: 24, textAlign: 'center', color: '#77756d', fontSize: 13 };
@@ -54,13 +55,15 @@ function useArtworkTexture(source) {
   return source && loaded?.source === source ? loaded.texture : null;
 }
 
-function ShirtPrint({ source, placement, depth }) {
+function ShirtPrint({ source, placement, depth, shirtGeometry }) {
   const texture = useArtworkTexture(source);
+  const geometry = useMemo(() => createShirtPrintGeometry(shirtGeometry, placement, depth), [shirtGeometry, placement, depth]);
+  useEffect(() => () => geometry.dispose(), [geometry]);
   if (!texture) return null;
   return (
-    <Decal position={placement.position} rotation={placement.rotation} scale={[...placement.size, depth]}>
-      <meshStandardMaterial map={texture} roughness={1} transparent depthWrite={false} polygonOffset polygonOffsetFactor={-6} side={THREE.FrontSide} />
-    </Decal>
+    <mesh geometry={geometry} renderOrder={2}>
+      <meshStandardMaterial map={texture} roughness={1} transparent depthWrite={false} polygonOffset polygonOffsetFactor={-6} polygonOffsetUnits={-4} side={THREE.FrontSide} />
+    </mesh>
   );
 }
 
@@ -76,7 +79,7 @@ function TShirt({ color, prints }) {
       <mesh geometry={geometry} position={layout.center.clone().negate().toArray()}>
         <meshStandardMaterial color={color} roughness={0.96} metalness={0} normalMap={sourceMaterial?.normalMap} normalScale={[0.25, 0.25]} aoMap={sourceMaterial?.aoMap} aoMapIntensity={0.45} side={THREE.DoubleSide} />
         {Object.entries(prints).filter(([side, source]) => source && layout[side]).map(([side, source]) => (
-          <ShirtPrint key={side} source={source} placement={layout[side]} depth={side === 'left' || side === 'right' ? SLEEVE_PRINT_DEPTH : PRINT_DEPTH} />
+          <ShirtPrint key={side} source={source} placement={layout[side]} depth={side === 'left' || side === 'right' ? SLEEVE_PRINT_DEPTH : PRINT_DEPTH} shirtGeometry={geometry} />
         ))}
       </mesh>
     </group>
