@@ -30,6 +30,35 @@ function shapeText(object, requestedCurve, center = object.getCenterPoint()) {
   object.setCoords();
 }
 
+function artworkBounds(object) {
+  const box = object.getBoundingRect();
+  if (!isText(object) || !object.studioCurve) return box;
+  // Fabric measures text-on-path from the path, not the rotated glyphs. A
+  // letter can extend a full font height beyond that box and be clipped from
+  // both the editor canvas and the texture sent to the 3D shirt.
+  const fontScale = Math.max(Math.abs(object.scaleX ?? 1), Math.abs(object.scaleY ?? 1));
+  const padding = (object.fontSize + (object.strokeWidth || 0)) * fontScale * 1.1;
+  return { left: box.left - padding, top: box.top - padding,
+    width: box.width + padding * 2, height: box.height + padding * 2 };
+}
+
+function keepCurvedTextPrintable(object, rect) {
+  if (!isText(object) || !object.studioCurve) return;
+  const safe = safePrintRect(rect);
+  let box = artworkBounds(object);
+  if (box.width > safe.width || box.height > safe.height) {
+    const scale = Math.min(safe.width / box.width, safe.height / box.height) * 0.999;
+    object.set({ scaleX: object.scaleX * scale, scaleY: object.scaleY * scale });
+    object.setCoords();
+    box = artworkBounds(object);
+  }
+  const right = safe.left + safe.width, bottom = safe.top + safe.height;
+  const dx = box.left < safe.left ? safe.left - box.left : box.left + box.width > right ? right - box.left - box.width : 0;
+  const dy = box.top < safe.top ? safe.top - box.top : box.top + box.height > bottom ? bottom - box.top - box.height : 0;
+  if (dx || dy) object.set({ left: object.left + dx, top: object.top + dy });
+  object.setCoords();
+}
+
 function styleObject(o) {
   o.set({ cornerColor: '#fff', cornerStrokeColor: '#c8301f', borderColor: '#c8301f', cornerStyle: 'circle',
     cornerSize: 13, touchCornerSize: 28, transparentCorners: false, padding: 7, borderScaleFactor: 1.5 });
@@ -49,7 +78,11 @@ async function restoreObjects(surface, rect) {
     image.set({ originX: 'left', originY: 'top', left: r.left, top: r.top, scaleX: r.width / image.width, scaleY: r.height / image.height, studioName: 'Imported artwork' });
     objects.push(image);
   }
-  return objects.map(styleObject);
+  return objects.map(object => {
+    styleObject(object);
+    keepCurvedTextPrintable(object, rect);
+    return object;
+  });
 }
 
 function exportPrint(canvas, rect, multiplier = 3) {
@@ -96,6 +129,7 @@ export default class CanvasEngine {
     this.canvas.on('text:changed', ({ target }) => {
       if (isText(target) && target.studioCurve) {
         shapeText(target, target.studioCurve);
+        keepCurvedTextPrintable(target, this.rect);
         this.canvas.requestRenderAll();
         this.schedulePreview();
       }
@@ -156,9 +190,9 @@ export default class CanvasEngine {
     const active = new Set([target, ...this.canvas.getActiveObjects(), ...(target.type === 'activeselection' ? target.getObjects() : [])]);
     const peers = this.canvas.getObjects().filter(item => !active.has(item) && item.visible !== false && item.opacity !== 0).map(item => {
       item.setCoords();
-      return { id: item.studioId, name: item.studioName, box: item.getBoundingRect() };
+      return { id: item.studioId, name: item.studioName, box: artworkBounds(item) };
     });
-    const result = solveMoveSnap({ box: target.getBoundingRect(), area: this.rect, peers, session: this.snapSession,
+    const result = solveMoveSnap({ box: artworkBounds(target), area: this.rect, peers, session: this.snapSession,
       scale: (this.displayWidth || 450) / BOARD.width, bypass: !this.snap || !!e?.altKey });
     if (result.dx || result.dy) {
       target.set({ left: target.left + result.dx, top: target.top + result.dy });
@@ -184,9 +218,8 @@ export default class CanvasEngine {
     this.snapTimer = setTimeout(() => this.clearSnapping(), 1800);
   }
 
-  showAlignment(value) {
+  showAlignment(value, r = this.rect) {
     if (!this.snap) return;
-    const r = this.rect;
     const horizontal = ['left', 'center', 'right'].includes(value);
     const center = value === 'center' || value === 'middle';
     const at = horizontal
@@ -206,7 +239,7 @@ export default class CanvasEngine {
     const object = this.selected;
     const safe = safePrintRect(this.rect);
     object.setCoords();
-    const box = object.getBoundingRect();
+    const box = artworkBounds(object);
     if (box.width > safe.width || box.height > safe.height) {
       const original = { x: object.scaleX, y: object.scaleY };
       // Measure the rendered bounds at each scale: rotated objects and uniform
@@ -216,14 +249,14 @@ export default class CanvasEngine {
         const factor = (low + high) / 2;
         object.set({ scaleX: original.x * factor, scaleY: original.y * factor });
         object.setCoords();
-        const bounds = object.getBoundingRect();
+        const bounds = artworkBounds(object);
         if (bounds.width <= safe.width && bounds.height <= safe.height) low = factor;
         else high = factor;
       }
       object.set({ scaleX: original.x * low, scaleY: original.y * low });
       object.setCoords();
     }
-    const offset = positionOffset(object.getBoundingRect(), this.rect, position);
+    const offset = positionOffset(artworkBounds(object), this.rect, position);
     object.set({ left: object.left + offset.x, top: object.top + offset.y });
   }
 
@@ -326,7 +359,7 @@ export default class CanvasEngine {
     if (this.disposed) return;
     const o = this.selected;
     const rect = this.rect;
-    const box = o?.getBoundingRect();
+    const box = o && artworkBounds(o);
     this.onChange({
       document: { ...this.document, prints: { ...this.document.prints } },
       loading: this.loading, error: this.failed, changed,
@@ -402,6 +435,7 @@ export default class CanvasEngine {
     object.set(values);
     if (isText(object) && (values.studioCurve !== undefined || (object.studioCurve && ['text', 'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'charSpacing'].some(key => values[key] !== undefined)))) {
       shapeText(object, values.studioCurve ?? object.studioCurve, center);
+      keepCurvedTextPrintable(object, this.rect);
     }
     if (object.type === 'activeselection' && values.opacity !== undefined) {
       object.set({ opacity: 1 });
@@ -472,18 +506,21 @@ export default class CanvasEngine {
     else if (action === 'nudge') o.set({ left: o.left + value[0], top: o.top + value[1] });
     else if (action === 'position') this.positionArtwork(position);
     else if (action === 'size') {
-      const r = this.rect, box = o.getBoundingRect();
+      const r = this.rect, box = artworkBounds(o);
       const factor = Math.min(r.width * value / box.width, r.height * value / box.height);
       o.set({ scaleX: o.scaleX * factor, scaleY: o.scaleY * factor });
       o.setPositionByOrigin(new fabric.Point(r.left + r.width / 2, r.top + r.height / 2), 'center', 'center');
     } else if (action === 'align') {
-      const r = this.rect, b = o.getBoundingRect();
+      keepCurvedTextPrintable(o, this.rect);
+      const r = isText(o) && o.studioCurve ? safePrintRect(this.rect) : this.rect;
+      const b = artworkBounds(o);
       const x = value === 'left' ? r.left - b.left : value === 'right' ? r.left + r.width - b.left - b.width : value === 'center' ? r.left + r.width / 2 - b.left - b.width / 2 : 0;
       const y = value === 'top' ? r.top - b.top : value === 'bottom' ? r.top + r.height - b.top - b.height : value === 'middle' ? r.top + r.height / 2 - b.top - b.height / 2 : 0;
       o.set({ left: o.left + x, top: o.top + y });
     }
+    if (action === 'size') keepCurvedTextPrintable(o, this.rect);
     o.setCoords(); c.requestRenderAll(); this.commit();
-    if (action === 'align') this.showAlignment(value);
+    if (action === 'align') this.showAlignment(value, isText(o) && o.studioCurve ? safePrintRect(this.rect) : this.rect);
     if (action === 'position') this.showQuickPosition(position);
   }
 

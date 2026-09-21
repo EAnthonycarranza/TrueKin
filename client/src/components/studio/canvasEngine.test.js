@@ -259,6 +259,49 @@ test('curved text remains editable through spacing changes, save, reopen, and un
   assert.equal(reopened.selected.path, undefined, 'straight text has no path');
 });
 
+test('curved lettering stays inside the printable crop used by both previews', async t => {
+  const { engine } = await createEngine(t);
+  const rect = engine.rect;
+  const outsideInk = async object => {
+    const canvas = new fabric.StaticCanvas(null, { width: BOARD.width, height: BOARD.height, enableRetinaScaling: false });
+    try {
+      canvas.add(...await fabric.util.enlivenObjects([object.toObject(['studioCurve'])]));
+      const image = await loadImage(canvas.toDataURL({ format: 'png', enableRetinaScaling: false }));
+      const pixels = createCanvas(image.width, image.height);
+      const context = pixels.getContext('2d');
+      context.drawImage(image, 0, 0);
+      const data = context.getImageData(0, 0, image.width, image.height).data;
+      let outside = 0;
+      for (let y = 0; y < image.height; y++) for (let x = 0; x < image.width; x++) {
+        if (data[(y * image.width + x) * 4 + 3] > 32 &&
+          (x < rect.left || x >= rect.left + rect.width || y < rect.top || y >= rect.top + rect.height)) outside++;
+      }
+      return outside;
+    } finally { await canvas.dispose(); }
+  };
+
+  engine.addText('STAND TRUE. STAY LOYAL.');
+  engine.command('position', 'top-center');
+  engine.update({ studioCurve: 100 });
+  assert.equal(await outsideInk(engine.selected), 0, 'arch up stays fully printable after shaping near the top');
+  engine.command('position', 'top-center');
+  assert.equal(await outsideInk(engine.selected), 0, 'top quick positioning respects curved glyphs');
+  engine.command('align', 'top');
+  assert.equal(await outsideInk(engine.selected), 0, 'aligning an arch to the print edge keeps its letters visible');
+  engine.command('position', 'bottom-center');
+  engine.update({ studioCurve: -100 });
+  assert.equal(await outsideInk(engine.selected), 0, 'arch down stays fully printable near the bottom');
+  assert.ok(engine.getDocument().prints.front?.startsWith('data:image/png;base64,'), 'the 3D texture uses the fitted artwork');
+
+  const { engine: reopened } = await createEngine(t, engine.getDocument());
+  assert.equal(await outsideInk(reopened.canvas.getObjects()[0]), 0, 'saved curved text remains printable when reopened');
+
+  const clippedDraft = engine.getDocument();
+  clippedDraft.surfaces.front.objects[0].top = rect.top;
+  const { engine: repaired } = await createEngine(t, clippedDraft);
+  assert.equal(await outsideInk(repaired.canvas.getObjects()[0]), 0, 'an older cropped draft is repaired on load');
+});
+
 test('saving a transformed multi-selection preserves canvas-space positions without disrupting selection', async t => {
   const { engine } = await createEngine(t);
   engine.addShape('circle', '#111111'); engine.command('nudge', [-45, 0]);
