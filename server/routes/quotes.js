@@ -11,7 +11,10 @@ const {
 const { auth, adminOnly } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 
-router.post('/', upload.single('designPreview'), createQuote);
+router.post('/', upload.fields([
+  { name: 'designPreview', maxCount: 1 },
+  { name: 'designSidePreviews', maxCount: 3 },
+]), createQuote);
 router.get('/admin/all', auth, adminOnly, adminListQuotes);
 router.get('/admin/:id', auth, adminOnly, adminGetQuote);
 router.put('/admin/:id/status', auth, adminOnly, adminUpdateQuoteStatus);

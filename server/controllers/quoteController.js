@@ -6,6 +6,7 @@ const SiteSettings = require('../models/SiteSettings');
 const storage = require('../utils/storage');
 const { RECAPTCHA_ACTIONS, verifyRecaptcha } = require('../utils/recaptcha');
 const mail = require('../utils/email');
+const { STUDIO_SIDES, getStudioPreviews } = require('../utils/quoteStudioPreviews');
 
 function requestError(message, status = 400) {
   return Object.assign(new Error(message), { status });
@@ -65,7 +66,7 @@ async function storeQuoteImage(file, prefix) {
 }
 
 exports.createQuote = async (req, res) => {
-  let storedPreview = '';
+  const storedImages = [];
   try {
     const { name, email, phone, organization, quantity, neededBy, details, recaptchaToken } = req.body;
     const requestType = req.body.requestType === 'studio' ? 'studio' : 'basic';
@@ -85,13 +86,25 @@ exports.createQuote = async (req, res) => {
 
     let productType = 'other';
     let designData = null;
+    let designSidePreviews = [];
     let specifications;
     if (requestType === 'studio') {
       productType = ['tshirt', 'sticker'].includes(req.body.productType) ? req.body.productType : '';
       if (!productType) throw requestError('Choose a T-shirt or sticker for your studio quote.');
       await ensureStudioProductEnabled(productType);
       designData = validateStudioDesign(req.body.designData, productType);
-      if (!req.file) throw requestError('Attach a studio preview before submitting this quote.');
+      const frontFile = req.files?.designPreview?.[0] || req.file;
+      if (!frontFile) throw requestError('Attach a studio preview before submitting this quote.');
+      const otherFiles = req.files?.designSidePreviews || [];
+      const otherSideIds = parseJson(req.body.designSideIds, 'The studio side labels', null);
+      if (otherFiles.length || otherSideIds !== null) {
+        const expectedSides = STUDIO_SIDES[productType].slice(1);
+        if (!Array.isArray(otherSideIds) || otherSideIds.length !== expectedSides.length ||
+            otherFiles.length !== expectedSides.length ||
+            otherSideIds.some((side, index) => side !== expectedSides[index])) {
+          throw requestError('Attach a preview for every product side in studio order.');
+        }
+      }
       const sourceSpecifications = parseJson(req.body.specifications, 'The quote specifications', {});
       if (!sourceSpecifications || typeof sourceSpecifications !== 'object' || Array.isArray(sourceSpecifications)) {
         throw requestError('The quote specifications must be an object.');
@@ -109,7 +122,15 @@ exports.createQuote = async (req, res) => {
         stickerSize: productType === 'sticker' ? stickerSize : '',
         rush: sourceSpecifications.rush === true || sourceSpecifications.rush === 'true',
       };
-      storedPreview = await storeQuoteImage(req.file, 'quote-design');
+      const frontUrl = await storeQuoteImage(frontFile, 'quote-design-front');
+      storedImages.push(frontUrl);
+      designSidePreviews = [{ side: 'front', imageUrl: frontUrl }];
+      for (let index = 0; index < otherFiles.length; index += 1) {
+        const side = otherSideIds[index];
+        const imageUrl = await storeQuoteImage(otherFiles[index], `quote-design-${side}`);
+        storedImages.push(imageUrl);
+        designSidePreviews.push({ side, imageUrl });
+      }
     }
 
     const quote = await Quote.create({
@@ -123,7 +144,8 @@ exports.createQuote = async (req, res) => {
       neededBy: text(neededBy, 80),
       details: text(details, 4000),
       designData,
-      designPreviewUrl: storedPreview,
+      designPreviewUrl: designSidePreviews[0]?.imageUrl || '',
+      designSidePreviews,
       specifications,
     });
 
@@ -144,7 +166,7 @@ exports.createQuote = async (req, res) => {
       confirmationEmailSent,
     });
   } catch (error) {
-    if (storedPreview) await storage.deleteImage(storedPreview).catch(() => {});
+    await Promise.all(storedImages.map((imageUrl) => storage.deleteImage(imageUrl).catch(() => {})));
     res.status(error.status || 500).json({ message: error.message });
   }
 };
@@ -216,7 +238,17 @@ exports.adminSaveQuoteBuilder = async (req, res) => {
     const requestedPreview = payload.productPreview;
     const productImageFile = req.files?.productImage?.[0];
     let productPreview;
-    if (requestedPreview?.sourceProductId) {
+    if (requestedPreview?.sourceStudioSide) {
+      if (productImageFile || requestedPreview.sourceProductId) throw requestError('Choose one product preview source.');
+      const studioSide = getStudioPreviews(quote).find((preview) => preview.side === requestedPreview.sourceStudioSide);
+      if (!studioSide) throw requestError('Choose a studio side attached to this request.');
+      productPreview = {
+        sourceStudioSide: studioSide.side,
+        title: text(requestedPreview.title || `${quote.productType === 'sticker' ? 'Sticker' : 'T-shirt'} · ${studioSide.label}`, 160),
+        description: text(requestedPreview.description, 700),
+        imageUrl: studioSide.imageUrl,
+      };
+    } else if (requestedPreview?.sourceProductId) {
       if (productImageFile) throw requestError('Choose a catalog product or upload a custom preview, not both.');
       if (!mongoose.isValidObjectId(requestedPreview.sourceProductId)) throw requestError('Choose a valid catalog product.');
       const product = await Product.findById(requestedPreview.sourceProductId);

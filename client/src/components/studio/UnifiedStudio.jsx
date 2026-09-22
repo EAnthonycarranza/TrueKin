@@ -51,7 +51,7 @@ function readDraft(key, type) {
   } catch { return null; }
 }
 
-export default function UnifiedStudio({ designData, productType, onProductTypeChange, onDesignChange, draftKey = 'playground', onSave, onSnapshot, onColorways, availableColors = NO_COLORS, availableProductTypes = ALL_PRODUCT_TYPES, saveLabel = 'Save design', saving = false, compactTools = false }) {
+export default function UnifiedStudio({ designData, productType, onProductTypeChange, onDesignChange, draftKey = 'playground', onSave, onSnapshot, onColorways, availableColors = NO_COLORS, availableProductTypes = ALL_PRODUCT_TYPES, saveLabel = 'Save design', saving = false, compactTools = false, captureAllSides = false }) {
   const snapHelpId = useId();
   const [start] = useState(() => initialState(designData, productType));
   const [initialDocument, setInitialDocument] = useState(start.document);
@@ -242,8 +242,15 @@ export default function UnifiedStudio({ designData, productType, onProductTypeCh
 
   const save = () => run('Saving design', async () => {
     const doc = engine().getDocument(), savedRevision = revision.current;
-    const blob = await canvasBlob(await productSnapshot(doc));
-    const result = onSave ? await onSave(blob, doc) : null;
+    const sidePreviews = captureAllSides
+      ? await Promise.all(SURFACES[type].map(async (surface) => ({
+        side: surface.id,
+        label: surface.label,
+        blob: await canvasBlob(await productSnapshot(doc, surface.id)),
+      })))
+      : null;
+    const blob = sidePreviews?.[0].blob || await canvasBlob(await productSnapshot(doc));
+    const result = onSave ? await onSave(blob, doc, sidePreviews) : null;
     if (!onSave) download(new Blob([JSON.stringify(doc)], { type: 'application/json' }), `truekin-${type}-design.json`);
     const persisted = result?.persisted !== false;
     if (revision.current === savedRevision && persisted) {

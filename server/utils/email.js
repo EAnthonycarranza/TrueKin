@@ -18,6 +18,7 @@
  */
 const path = require('path');
 const nodemailer = require('nodemailer');
+const { getStudioPreviews } = require('./quoteStudioPreviews');
 const { pickupContact } = require('./fulfillment');
 
 let cachedTransporter = null;
@@ -465,9 +466,9 @@ exports.sendQuoteProposal = async function sendQuoteProposal(quote) {
   const baseUrl = (process.env.CLIENT_URL || '').replace(/\/$/, '');
   const imageUrl = (value) => /^https?:\/\//i.test(value) ? value : `${baseUrl}${value}`;
   const concepts = [
-    ...(quote.designPreviewUrl ? [{ label: 'Your studio design', imageUrl: quote.designPreviewUrl }] : []),
+    ...getStudioPreviews(quote).map((preview) => ({ label: `Your studio design · ${preview.label}`, imageUrl: preview.imageUrl })),
     ...(proposal.concepts || []),
-  ].slice(0, 4);
+  ];
   const itemRows = proposal.lineItems.map((item) => `
     <tr><td style="padding:12px 0;border-bottom:1px solid ${C.line};font-family:${SANS};font-size:13px;color:${C.ink};">${escapeHtml(item.description)}<br/><small style="color:${C.muted};">${item.quantity} &times; ${money(item.unitPrice)}</small></td><td style="text-align:right;border-bottom:1px solid ${C.line};font-family:${SANS};font-weight:700;">${money(item.quantity * item.unitPrice)}</td></tr>
   `).join('');

@@ -14,6 +14,7 @@ const conceptSchema = new mongoose.Schema({
 
 const productPreviewSchema = new mongoose.Schema({
   sourceProductId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', default: null },
+  sourceStudioSide: { type: String, enum: ['', 'front', 'back', 'left', 'right'], default: '' },
   title: { type: String, trim: true, maxlength: 160, default: '' },
   description: { type: String, trim: true, maxlength: 700, default: '' },
   imageUrl: { type: String, trim: true, maxlength: 2000, default: '' },
@@ -100,6 +101,13 @@ const quoteSchema = new mongoose.Schema({
     type: String,
     trim: true,
     default: '',
+  },
+  designSidePreviews: {
+    type: [{
+      side: { type: String, enum: ['front', 'back', 'left', 'right'], required: true },
+      imageUrl: { type: String, trim: true, maxlength: 2000, required: true },
+    }],
+    default: [],
   },
   specifications: {
     printLocations: { type: Number, min: 1, max: 4, default: 1 },

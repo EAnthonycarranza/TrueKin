@@ -114,6 +114,7 @@ test('studio quote stores artwork and specifications without computing or return
   assert.equal(created.productType, 'sticker');
   assert.equal(created.designData, JSON.stringify(design));
   assert.equal(created.designPreviewUrl, '/uploads/quote-design-test.png');
+  assert.deepEqual(created.designSidePreviews, [{ side: 'front', imageUrl: '/uploads/quote-design-test.png' }]);
   assert.equal(created.specifications.rush, true);
   assert.equal(created.specifications.stickerSize, '4in');
   assert.equal(created.estimate, undefined);
@@ -122,6 +123,65 @@ test('studio quote stores artwork and specifications without computing or return
   assert.equal(email.sendQuoteRequestConfirmation.mock.callCount(), 1);
   assert.equal(email.sendQuoteRequestConfirmation.mock.calls[0].arguments[0].designPreviewUrl, '/uploads/quote-design-test.png');
   assert.equal(res.data.confirmationEmailSent, true);
+});
+
+test('shirt studio quotes preserve a mockup for every side in the admin brief', async () => {
+  const png = await sharp({ create: { width: 24, height: 24, channels: 4, background: '#446343' } }).png().toBuffer();
+  mock.method(storage, 'saveImage', async (name) => `/uploads/${name.match(/quote-design-(front|back|left|right)/)[1]}.png`);
+  const file = { buffer: png, mimetype: 'image/png' };
+  const design = { studio: 'truekin-unified', version: 1, productType: 'tshirt', surfaces: {}, prints: {} };
+  const res = response();
+  await quotes.createQuote({
+    body: body({ requestType: 'studio', productType: 'tshirt', designData: JSON.stringify(design), designSideIds: JSON.stringify(['back', 'left', 'right']) }),
+    files: { designPreview: [file], designSidePreviews: [file, file, file] },
+    ip: '127.0.0.1',
+  }, res);
+  assert.equal(res.code, 201);
+  assert.equal(created.designPreviewUrl, '/uploads/front.png');
+  assert.deepEqual(created.designSidePreviews, [
+    { side: 'front', imageUrl: '/uploads/front.png' },
+    { side: 'back', imageUrl: '/uploads/back.png' },
+    { side: 'left', imageUrl: '/uploads/left.png' },
+    { side: 'right', imageUrl: '/uploads/right.png' },
+  ]);
+  assert.equal(storage.saveImage.mock.callCount(), 4);
+});
+
+test('a partial set of shirt side previews cannot be attached as a complete studio proof', async () => {
+  const png = await sharp({ create: { width: 24, height: 24, channels: 4, background: '#446343' } }).png().toBuffer();
+  mock.method(storage, 'saveImage', async () => '/uploads/unexpected.png');
+  const file = { buffer: png, mimetype: 'image/png' };
+  const res = response();
+  await quotes.createQuote({
+    body: body({ requestType: 'studio', productType: 'tshirt', designData: JSON.stringify({ studio: 'truekin-unified', productType: 'tshirt' }), designSideIds: JSON.stringify(['back']) }),
+    files: { designPreview: [file], designSidePreviews: [file] },
+    ip: '127.0.0.1',
+  }, res);
+  assert.equal(res.code, 400);
+  assert.match(res.data.message, /every product side/i);
+  assert.equal(storage.saveImage.mock.callCount(), 0);
+  assert.equal(created, null);
+});
+
+test('failed side storage removes mockups already uploaded for that request', async () => {
+  const png = await sharp({ create: { width: 24, height: 24, channels: 4, background: '#446343' } }).png().toBuffer();
+  let savedCount = 0;
+  mock.method(storage, 'saveImage', async () => {
+    savedCount += 1;
+    if (savedCount === 2) throw new Error('Storage unavailable');
+    return '/uploads/front.png';
+  });
+  mock.method(storage, 'deleteImage', async () => {});
+  const file = { buffer: png, mimetype: 'image/png' };
+  const res = response();
+  await quotes.createQuote({
+    body: body({ requestType: 'studio', productType: 'tshirt', designData: JSON.stringify({ studio: 'truekin-unified', productType: 'tshirt' }), designSideIds: JSON.stringify(['back', 'left', 'right']) }),
+    files: { designPreview: [file], designSidePreviews: [file, file, file] },
+    ip: '127.0.0.1',
+  }, res);
+  assert.equal(res.code, 500);
+  assert.equal(created, null);
+  assert.deepEqual(storage.deleteImage.mock.calls.map((call) => call.arguments[0]), ['/uploads/front.png']);
 });
 
 test('studio quote requires a matching editable design and preview before creating anything', async () => {
@@ -178,6 +238,41 @@ test('admin can select a catalog product preview without trusting the submitted 
   assert.equal(res.code, 200);
   assert.equal(quote.adminQuote.productPreview.imageUrl, '/uploads/real-product.png');
   assert.equal(quote.adminQuote.total, 48000);
+});
+
+test('admin can select a submitted studio side without trusting a forged image URL', async () => {
+  const quote = {
+    _id: '507f1f77bcf86cd799439011', quantity: 24, productType: 'tshirt', status: 'new',
+    designSidePreviews: [{ side: 'front', imageUrl: '/uploads/front.png' }, { side: 'back', imageUrl: '/uploads/back.png' }],
+    adminQuote: { concepts: [] }, save: async () => {},
+  };
+  mock.method(Quote, 'findById', async () => quote);
+  const res = response();
+  await quotes.adminSaveQuoteBuilder({
+    params: { id: quote._id },
+    body: { payload: JSON.stringify({ lineItems: [{ description: 'Custom shirts', quantity: 24, unitPrice: 2000 }], productPreview: { sourceStudioSide: 'back', title: 'Back design', imageUrl: 'https://attacker.example/image.png' } }) },
+    files: {},
+  }, res);
+  assert.equal(res.code, 200);
+  assert.equal(quote.adminQuote.productPreview.sourceStudioSide, 'back');
+  assert.equal(quote.adminQuote.productPreview.imageUrl, '/uploads/back.png');
+});
+
+test('admin cannot select a studio side that was not attached to the request', async () => {
+  const quote = {
+    _id: '507f1f77bcf86cd799439011', quantity: 24, productType: 'tshirt', status: 'new',
+    designSidePreviews: [{ side: 'front', imageUrl: '/uploads/front.png' }],
+    adminQuote: { concepts: [] }, save: async () => {},
+  };
+  mock.method(Quote, 'findById', async () => quote);
+  const res = response();
+  await quotes.adminSaveQuoteBuilder({
+    params: { id: quote._id },
+    body: { payload: JSON.stringify({ lineItems: [{ description: 'Custom shirts', quantity: 24, unitPrice: 2000 }], productPreview: { sourceStudioSide: 'back', imageUrl: '/uploads/forged.png' } }) },
+    files: {},
+  }, res);
+  assert.equal(res.code, 400);
+  assert.match(res.data.message, /attached/i);
 });
 
 test('admin can upload a one-off product preview for a custom proposal', async () => {

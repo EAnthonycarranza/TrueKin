@@ -34,6 +34,12 @@ test('a saved custom quote uses the requested sender and includes proof, concept
     email: 'alex@example.test',
     quantity: 50,
     designPreviewUrl: '/uploads/customer-proof.png',
+    designSidePreviews: [
+      { side: 'front', imageUrl: '/uploads/customer-proof.png' },
+      { side: 'back', imageUrl: '/uploads/back.png' },
+      { side: 'left', imageUrl: '/uploads/left.png' },
+      { side: 'right', imageUrl: '/uploads/right.png' },
+    ],
     adminQuote: {
       quoteNumber: 'TKQ-TEST',
       validUntil: '2026-10-01',
@@ -56,6 +62,11 @@ test('a saved custom quote uses the requested sender and includes proof, concept
   assert.equal(message.to, 'alex@example.test');
   assert.match(message.subject, /TKQ-TEST/);
   assert.match(message.html, /https:\/\/truekin\.example\.test\/uploads\/customer-proof\.png/);
+  for (const side of ['back', 'left', 'right']) {
+    assert.match(message.html, new RegExp(`https://truekin\\.example\\.test/uploads/${side}\\.png`));
+  }
+  assert.match(message.html, /Left sleeve/);
+  assert.match(message.html, /Right sleeve/);
   assert.match(message.html, /https:\/\/truekin\.example\.test\/uploads\/concept\.png/);
   assert.match(message.html, /https:\/\/truekin\.example\.test\/uploads\/product\.png/);
   assert.match(message.html, /Cut-to-shape sticker/);
