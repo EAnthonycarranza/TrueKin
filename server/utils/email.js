@@ -50,6 +50,11 @@ function getTransporter() {
     host: process.env.SMTP_HOST || 'smtp.gmail.com',
     port: Number(process.env.SMTP_PORT) || 465,
     secure: Number(process.env.SMTP_PORT || 465) === 465,
+    // Quote receipts are sent before the POST responds; bound stalled SMTP
+    // connections so a saved request never leaves the customer waiting.
+    connectionTimeout: 5000,
+    greetingTimeout: 5000,
+    socketTimeout: 10000,
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASSWORD,
@@ -394,6 +399,63 @@ async function deliver({ to, subject, html, text, tag }) {
     return false;
   }
 }
+
+/** Immediate receipt for both the quick quote form and the design studio. */
+exports.sendQuoteRequestConfirmation = async function sendQuoteRequestConfirmation(quote) {
+  if (!quote.email) return false;
+  const studio = quote.requestType === 'studio';
+  const product = studio ? (quote.productType === 'sticker' ? 'Sticker' : 'T-shirt') : 'Custom project';
+  const requestLabel = studio ? `${product} studio design` : 'Quick quote request';
+  const reference = `TKR-${quote._id.toString().slice(-8).toUpperCase()}`;
+  const quantity = Number(quote.quantity).toLocaleString('en-US');
+
+  const body = `
+    ${headline({
+      chip: 'Request received',
+      title: 'Your idea is in',
+      accentTitle: 'Truekin&rsquo;s hands.',
+      lead: `Hi ${escapeHtml(quote.name)}, your ${studio ? 'studio design and production brief have' : 'project details have'} been sent to Truekin. We&rsquo;ve saved your request for our team to review.`,
+    })}
+    ${panel(`
+      ${label('Your request')}
+      <div style="font-family:${SANS};font-size:14px;line-height:1.8;color:${C.body};">
+        <strong style="color:${C.ink};">${escapeHtml(requestLabel)}</strong><br/>
+        Quantity: ${escapeHtml(quantity)}${quote.neededBy ? `<br/>Needed by: ${escapeHtml(quote.neededBy)}` : ''}<br/>
+        Reference: <span style="font-family:${MONO};">${escapeHtml(reference)}</span>
+      </div>
+    `, { background: C.card })}
+    <p style="font-family:${SANS};font-size:14px;line-height:1.7;color:${C.body};margin:0 0 16px;">
+      An admin will review your request and reply to you at this email address with a custom quote, artwork notes, and timing within one business day. This receipt is not a price or payment request.
+    </p>
+    <p style="font-family:${SANS};font-size:13px;line-height:1.7;color:${C.muted};margin:0;">
+      Need to add something? Reply to this email and include your request reference.
+    </p>
+  `;
+
+  const text = plainText([
+    `Hi ${quote.name},`,
+    '',
+    'Your request was sent to Truekin. We have saved it for our team to review.',
+    '',
+    `Request: ${requestLabel}`,
+    `Quantity: ${quantity}`,
+    quote.neededBy ? `Needed by: ${quote.neededBy}` : null,
+    `Reference: ${reference}`,
+    '',
+    'An admin will reply with your custom quote, artwork notes, and timing within one business day. This receipt is not a price or payment request.',
+    'Need to add something? Reply to this email and include your request reference.',
+    '',
+    'TRUEKIN — Stand True. Stay Loyal.',
+  ]);
+
+  return deliver({
+    to: quote.email,
+    subject: `Your request was sent to Truekin · ${reference}`,
+    html: wrapEmail(body, 'Your request is in Truekin’s hands. We’ll be in touch with a personal quote.'),
+    text,
+    tag: `quote request ${reference}`,
+  });
+};
 
 /** The admin-reviewed proposal, sent explicitly from the quote builder. */
 exports.sendQuoteProposal = async function sendQuoteProposal(quote) {

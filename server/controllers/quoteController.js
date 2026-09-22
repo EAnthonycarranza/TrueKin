@@ -5,7 +5,7 @@ const Product = require('../models/Product');
 const SiteSettings = require('../models/SiteSettings');
 const storage = require('../utils/storage');
 const { RECAPTCHA_ACTIONS, verifyRecaptcha } = require('../utils/recaptcha');
-const email = require('../utils/email');
+const mail = require('../utils/email');
 
 function requestError(message, status = 400) {
   return Object.assign(new Error(message), { status });
@@ -127,11 +127,21 @@ exports.createQuote = async (req, res) => {
       specifications,
     });
 
+    // The request is already saved: an unavailable mail provider must not
+    // turn a successful submission into an error or invite a duplicate retry.
+    let confirmationEmailSent = false;
+    try {
+      confirmationEmailSent = await mail.sendQuoteRequestConfirmation(quote);
+    } catch (emailError) {
+      console.error('Quote request confirmation failed:', emailError.message);
+    }
+
     res.status(201).json({
       message: requestType === 'studio'
         ? "Design received — your production-ready brief is with Truekin. An admin will email your custom quote within 1 business day."
         : "Thanks — we'll reply with a custom quote within 1 business day.",
       quote: { id: quote._id, createdAt: quote.createdAt },
+      confirmationEmailSent,
     });
   } catch (error) {
     if (storedPreview) await storage.deleteImage(storedPreview).catch(() => {});
@@ -297,7 +307,7 @@ exports.adminSendQuoteProposal = async (req, res) => {
     const quote = await Quote.findById(req.params.id);
     if (!quote) return res.status(404).json({ message: 'Quote not found.' });
     if (!quote.adminQuote?.lineItems?.length) throw requestError('Save the quote with at least one priced line item before sending it.');
-    const sent = await email.sendQuoteProposal(quote);
+    const sent = await mail.sendQuoteProposal(quote);
     if (!sent) throw requestError('The quote email could not be sent. Check mail settings and try again.', 503);
     quote.status = 'quoted';
     quote.adminQuote.lastSentAt = new Date();

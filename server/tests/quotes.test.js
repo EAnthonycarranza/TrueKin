@@ -40,6 +40,7 @@ beforeEach(() => {
     created = { _id: 'quote-id', createdAt: new Date(), ...data };
     return created;
   });
+  mock.method(email, 'sendQuoteRequestConfirmation', async () => true);
 });
 
 afterEach(() => { mock.restoreAll(); });
@@ -51,6 +52,29 @@ test('a verified quote action creates the inquiry', async () => {
   assert.equal(created.email, 'alex@example.test');
   assert.equal(created.quantity, 24);
   assert.equal(created.requestType, 'basic');
+  assert.equal(email.sendQuoteRequestConfirmation.mock.callCount(), 1);
+  assert.equal(email.sendQuoteRequestConfirmation.mock.calls[0].arguments[0], created);
+  assert.equal(res.data.confirmationEmailSent, true);
+});
+
+test('a mail failure does not lose a saved quote or invite a duplicate submission', async () => {
+  email.sendQuoteRequestConfirmation.mock.mockImplementation(async () => false);
+  const res = response();
+  await quotes.createQuote({ body: body(), ip: '127.0.0.1' }, res);
+  assert.equal(res.code, 201);
+  assert.equal(res.data.quote.id, 'quote-id');
+  assert.equal(res.data.confirmationEmailSent, false);
+  assert.ok(created);
+});
+
+test('an unexpected mail exception still leaves the submitted quote in the admin workspace', async () => {
+  mock.method(console, 'error', () => {});
+  email.sendQuoteRequestConfirmation.mock.mockImplementation(async () => { throw new Error('SMTP unavailable'); });
+  const res = response();
+  await quotes.createQuote({ body: body(), ip: '127.0.0.1' }, res);
+  assert.equal(res.code, 201);
+  assert.equal(res.data.confirmationEmailSent, false);
+  assert.ok(created);
 });
 
 test('quote requests require a validly formatted email address before verification or storage', async () => {
@@ -60,6 +84,7 @@ test('quote requests require a validly formatted email address before verificati
   assert.match(res.data.message, /valid email address/i);
   assert.equal(created, null);
   assert.equal(global.fetch.mock.callCount(), 0);
+  assert.equal(email.sendQuoteRequestConfirmation.mock.callCount(), 0);
 });
 
 test('quote quantities must be whole numbers rather than parseable prefixes', async () => {
@@ -94,6 +119,9 @@ test('studio quote stores artwork and specifications without computing or return
   assert.equal(created.estimate, undefined);
   assert.equal(res.data.estimate, undefined);
   assert.equal(res.data.quote.estimate, undefined);
+  assert.equal(email.sendQuoteRequestConfirmation.mock.callCount(), 1);
+  assert.equal(email.sendQuoteRequestConfirmation.mock.calls[0].arguments[0].designPreviewUrl, '/uploads/quote-design-test.png');
+  assert.equal(res.data.confirmationEmailSent, true);
 });
 
 test('studio quote requires a matching editable design and preview before creating anything', async () => {
@@ -202,4 +230,5 @@ test('quotes reject missing, mismatched, and low-score reCAPTCHA results', async
   await quotes.createQuote({ body: body(), ip: '127.0.0.1' }, suspicious);
   assert.equal(suspicious.code, 403);
   assert.equal(created, null);
+  assert.equal(email.sendQuoteRequestConfirmation.mock.callCount(), 0);
 });

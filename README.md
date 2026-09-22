@@ -230,7 +230,7 @@ npm run seed
 | `RECAPTCHA_MIN_SCORE` | | reCAPTCHA v3 threshold; defaults to `0.5` |
 | `VITE_RECAPTCHA_SITE_KEY` | ● | Public reCAPTCHA v3 site key embedded in the client build |
 | `SHIPPO_API_KEY` | | Live shipping rates at checkout |
-| `SMTP_HOST` · `SMTP_PORT` · `SMTP_USER` · `SMTP_PASSWORD` · `EMAIL_FROM` | | Order confirmations |
+| `SMTP_HOST` · `SMTP_PORT` · `SMTP_USER` · `SMTP_PASSWORD` · `EMAIL_FROM` | | Order confirmations, quote-request receipts, and admin-sent quotes |
 | `STORE_NAME` · `STORE_STREET` · `STORE_CITY` · `STORE_STATE` · `STORE_ZIP` · `STORE_COUNTRY` · `STORE_PHONE` · `STORE_EMAIL` | | Ship-from address and contact details |
 | `R2_ACCOUNT_ID` · `R2_ACCESS_KEY_ID` · `R2_SECRET_ACCESS_KEY` · `R2_BUCKET` | | Cloudflare R2 image storage |
 | `R2_PUBLIC_BASE_URL` | | Serve images straight from R2 instead of through the dyno |

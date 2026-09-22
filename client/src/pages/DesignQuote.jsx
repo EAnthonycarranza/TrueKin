@@ -22,6 +22,7 @@ export default function DesignQuote() {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [sentEmail, setSentEmail] = useState('');
+  const [confirmationEmailSent, setConfirmationEmailSent] = useState(false);
   const studioProducts = stickerEnabled ? ['tshirt', 'sticker'] : ['tshirt'];
   const productSummary = `${productType === 'sticker' ? 'Sticker' : 'T-shirt'} · ${Number(specs.quantity || 0).toLocaleString()} pieces · ${productType === 'sticker' ? `${specs.stickerSize.replace('in', ' inch')} finished size` : `${specs.printLocations} print ${Number(specs.printLocations) === 1 ? 'location' : 'locations'}`}${specs.rush ? ' · Rush timing requested' : ''}`;
 
@@ -74,6 +75,7 @@ export default function DesignQuote() {
       formData.append('recaptchaToken', recaptchaToken);
       const result = await api.submitStudioQuote(formData);
       setSentEmail(customer.email);
+      setConfirmationEmailSent(result.confirmationEmailSent === true);
       setSent(true);
       toast.success(result.message || 'Your studio quote is with Truekin.');
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -85,7 +87,7 @@ export default function DesignQuote() {
   };
 
   if (sent) return (
-    <main className="dq-page"><section className="dq-success"><span><Check size={30} /></span><p className="dq-kicker">Studio submission received</p><h1>Your idea is in<br />Truekin’s hands.</h1><p>We sent the production brief to the admin workspace and will reply to <strong>{sentEmail}</strong> within one business day with confirmed pricing, artwork notes, and timing.</p><div><Link to="/shop" className="btn btn-primary">Browse the shop</Link><button type="button" className="btn btn-secondary" onClick={() => setSent(false)}>Start another design</button></div></section></main>
+    <main className="dq-page"><section className="dq-success"><span><Check size={30} /></span><p className="dq-kicker">Studio submission received</p><h1>Your idea is in<br />Truekin’s hands.</h1><p>We sent the production brief to the admin workspace and will reply to <strong>{sentEmail}</strong> within one business day with confirmed pricing, artwork notes, and timing.</p><p>{confirmationEmailSent ? 'A confirmation email has also been sent to you.' : 'Your brief is saved, but we could not send an automatic confirmation email right now.'}</p><div><Link to="/shop" className="btn btn-primary">Browse the shop</Link><button type="button" className="btn btn-secondary" onClick={() => setSent(false)}>Start another design</button></div></section></main>
   );
 
   return (

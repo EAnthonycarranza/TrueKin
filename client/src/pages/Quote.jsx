@@ -80,6 +80,7 @@ export default function Quote() {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [sentEmail, setSentEmail] = useState('');
+  const [confirmationEmailSent, setConfirmationEmailSent] = useState(false);
 
   const handleChange = (field) => (e) =>
     setQuote((q) => ({ ...q, [field]: e.target.value }));
@@ -104,6 +105,7 @@ export default function Quote() {
         recaptchaToken,
       });
       setSentEmail(quote.email);
+      setConfirmationEmailSent(res.confirmationEmailSent === true);
       setSent(true);
       setQuote(EMPTY_QUOTE);
       toast.success(res?.message || "Quote request sent — we'll be in touch.");
@@ -259,6 +261,7 @@ export default function Quote() {
                     business day with a full quote, mockup notes, and a
                     timeline.
                   </p>
+                  <p>{confirmationEmailSent ? 'A confirmation email has also been sent to you.' : 'Your request is saved, but we could not send an automatic confirmation email right now.'}</p>
                   <div className="tk-quote-success-actions">
                     <button
                       type="button"

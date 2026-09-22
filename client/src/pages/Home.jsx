@@ -79,6 +79,7 @@ export default function Home() {
   const [quoteSending, setQuoteSending] = useState(false);
   const [quoteSent, setQuoteSent] = useState(false);
   const [sentEmail, setSentEmail] = useState('');
+  const [confirmationEmailSent, setConfirmationEmailSent] = useState(false);
 
   useEffect(() => {
     api.getProducts('featured=true')
@@ -110,6 +111,7 @@ export default function Home() {
       });
       toast.success(res.message || 'Quote request received.');
       setSentEmail(quote.email);
+      setConfirmationEmailSent(res.confirmationEmailSent === true);
       setQuote(EMPTY_QUOTE);
       setQuoteSent(true);
     } catch (err) {
@@ -425,6 +427,7 @@ export default function Home() {
                     one business day with a full quote, mockup notes, and
                     timeline.
                   </p>
+                  <p>{confirmationEmailSent ? 'A confirmation email has also been sent to you.' : 'Your request is saved, but we could not send an automatic confirmation email right now.'}</p>
                   <button
                     type="button"
                     className="btn btn-secondary"
