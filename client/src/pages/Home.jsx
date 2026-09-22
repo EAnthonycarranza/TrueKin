@@ -130,12 +130,12 @@ export default function Home() {
         <div className="container home-hero-inner">
           <div className="home-hero-content">
             <span className="home-hero-tag stamp">
-              <Flame size={12} /> {BRAND_SLOGAN} · Custom apparel made to order
+              <Flame size={12} /> Your Design, Our Press
             </span>
             <h1 className="home-hero-title display">
-              <span className="home-hero-line">Your design,</span>
+              <span className="home-hero-line">Stand True,</span>
               <span className="home-hero-line home-hero-line-emph">
-                <span className="home-hero-accent">our press.</span>
+                <span className="home-hero-accent">Stay Loyal.</span>
               </span>
             </h1>
             <span className="rule rule-brand" aria-hidden />
