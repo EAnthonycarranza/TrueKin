@@ -212,10 +212,12 @@ async function decodePng(src) {
   const canvas = createCanvas(image.width, image.height);
   const context = canvas.getContext('2d');
   context.drawImage(image, 0, 0);
+  const data = context.getImageData(0, 0, image.width, image.height).data;
   return {
     width: image.width,
     height: image.height,
-    pixel: (x, y) => [...context.getImageData(x, y, 1, 1).data],
+    data,
+    pixel: (x, y) => [...data.slice((y * image.width + x) * 4, (y * image.width + x) * 4 + 4)],
   };
 }
 
@@ -305,6 +307,44 @@ test('curved lettering stays inside the printable crop used by both previews', a
   clippedDraft.surfaces.front.objects[0].top = rect.top;
   const { engine: repaired } = await createEngine(t, clippedDraft);
   assert.equal(await outsideInk(repaired.canvas.getObjects()[0]), 0, 'an older cropped draft is repaired on load');
+});
+
+test('arch-up 100 exports complete middle glyphs after a clipped text cache and on reopen', async t => {
+  const { engine } = await createEngine(t);
+  engine.addText('STAND TRUE. STAY LOYAL.');
+  engine.update({ studioCurve: 100 });
+  const complete = engine.getDocument().prints.front;
+  const text = engine.selected;
+  assert.equal(text.objectCaching, false);
+
+  // This is the exact failure mode of the downloaded artwork: Fabric's cache
+  // is sized from the path and clips the upper strokes near the arch's apex.
+  text.set({ objectCaching: true, dirty: true });
+  engine.sync();
+  const clipped = await decodePng(engine.getDocument().prints.front);
+  const intact = await decodePng(complete);
+  let missingInk = 0;
+  for (let i = 3; i < intact.data.length; i += 4) {
+    if (intact.data[i] > 128 && clipped.data[i] < 64) missingInk++;
+  }
+  assert.ok(missingInk > 100, 'the cached export reproduces visibly cropped letter strokes');
+
+  engine.update({ studioCurve: 100 });
+  assert.equal(text.objectCaching, false, 'reshaping must disable the undersized cache');
+  assert.ok(engine.getDocument().prints.front === complete, 'the PNG and 3D texture regain the missing ink');
+
+  const draft = engine.getDocument();
+  draft.surfaces.front.objects[0].objectCaching = true;
+  const { engine: reopened } = await createEngine(t, draft);
+  assert.equal(reopened.canvas.getObjects()[0].objectCaching, false, 'older cached text is repaired on load');
+  const reopenedPrint = await decodePng(reopened.getDocument().prints.front);
+  const countInk = image => {
+    let count = 0;
+    for (let i = 3; i < image.data.length; i += 4) if (image.data[i] > 128) count++;
+    return count;
+  };
+  assert.ok(Math.abs(countInk(reopenedPrint) - countInk(intact)) < 50,
+    'the restored PNG retains the complete arch despite a tiny printable-fit adjustment');
 });
 
 function shirtGeometryFromModel() {

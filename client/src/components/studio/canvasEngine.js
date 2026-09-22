@@ -22,6 +22,10 @@ function shapeText(object, requestedCurve, center = object.getCenterPoint()) {
     object.set({
       path: new fabric.Path(`M 0 0 C ${width * 0.25} ${rise} ${width * 0.75} ${rise} ${width} 0`, { visible: false, fill: null, stroke: null }),
       textAlign: 'center', studioCurve: curve,
+      // Fabric sizes a text-on-path cache from the path rather than every
+      // rotated glyph. At a full arch its cache crops the tops of the middle
+      // letters (including the T in STAY), in both the PNG and 3D texture.
+      objectCaching: false,
     });
   } else {
     object.set({ path: undefined, studioCurve: 0 });
@@ -60,6 +64,9 @@ function keepCurvedTextPrintable(object, rect) {
 }
 
 function styleObject(o) {
+  // Saved or legacy curved text may have been cached before this fix. Do not
+  // let it regain a clipped cache when a design is reopened or duplicated.
+  if (isText(o) && o.studioCurve) o.set({ objectCaching: false });
   o.set({ cornerColor: '#fff', cornerStrokeColor: '#c8301f', borderColor: '#c8301f', cornerStyle: 'circle',
     cornerSize: 13, touchCornerSize: 28, transparentCorners: false, padding: 7, borderScaleFactor: 1.5 });
   o.studioId ||= uid();
