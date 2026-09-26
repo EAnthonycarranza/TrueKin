@@ -18,9 +18,9 @@ function FlatPreview({ design, view, color }) {
   return result?.key === key && result.design === design ? <img src={result.src} alt={`Designed ${productLabel}, ${view}`} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <div role="status" style={{ padding: 24 }}>Preparing preview…</div>;
 }
 
-export default function UnifiedPreview({ designData, colorOverride, height = 500, style = {} }) {
+export default function UnifiedPreview({ designData, colorOverride, height = 500, style = {}, initialMode = 'auto', customerView = false }) {
   const [view, setView] = useState('front');
-  const [mode, setMode] = useState(() => window.matchMedia('(max-width: 760px)').matches ? '2d' : '3d');
+  const [mode, setMode] = useState(() => initialMode === 'auto' ? (window.matchMedia('(max-width: 760px)').matches ? '2d' : '3d') : initialMode);
   const design = useMemo(() => {
     try { return typeof designData === 'string' ? JSON.parse(designData) : designData; }
     catch { return null; }
@@ -36,7 +36,7 @@ export default function UnifiedPreview({ designData, colorOverride, height = 500
       <button type="button" className="btn btn-secondary btn-sm" onClick={() => setMode(m => m === '3d' ? '2d' : '3d')} style={{ minHeight: 40 }} aria-label={mode === '3d' ? 'Show 2D photo' : 'Show 3D preview'}>{mode === '3d' ? <ImageIcon size={15} /> : <Box size={15} />}{mode === '3d' ? '2D' : '3D'}</button>
     </div>
     <div style={{ height, maxHeight: '80vh', minHeight: 270 }}>
-      {mode === '3d' ? <Suspense fallback={<div role="status" style={{ padding: 24 }}>Preparing 3D preview…</div>}><ProductViewer productType={type} color={color} prints={design.prints} view={activeView} /></Suspense> : <FlatPreview design={design} view={activeView} color={color} />}
+      {mode === '3d' ? <Suspense fallback={<div role="status" style={{ padding: 24 }}>Preparing 3D preview…</div>}><ProductViewer customerView={customerView} productType={type} color={color} prints={design.prints} view={activeView} /></Suspense> : <FlatPreview design={design} view={activeView} color={color} />}
     </div>
     <p style={{ textAlign: 'center', padding: '0 12px 12px', fontSize: 12, color: 'var(--text-secondary)' }}>{mode === '3d' ? 'Drag to rotate · pinch to zoom' : 'Product photo preview'}</p>
   </div>;

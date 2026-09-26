@@ -1,7 +1,13 @@
+const crypto = require('crypto');
+
 const STUDIO_SIDES = {
   tshirt: ['front', 'back', 'left', 'right'],
   sticker: ['front'],
 };
+
+function createStudioPreviewToken() {
+  return crypto.randomBytes(24).toString('hex');
+}
 
 const STUDIO_SIDE_LABELS = {
   front: 'Front',
@@ -24,4 +30,4 @@ function getStudioPreviews(quote) {
     : [];
 }
 
-module.exports = { STUDIO_SIDES, getStudioPreviews };
+module.exports = { STUDIO_SIDES, createStudioPreviewToken, getStudioPreviews };

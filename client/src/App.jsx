@@ -19,6 +19,7 @@ import Register from './pages/auth/Register';
 import MyOrders from './pages/MyOrders';
 import Quote from './pages/Quote';
 import DesignQuote from './pages/DesignQuote';
+import QuoteDesignSample from './pages/QuoteDesignSample';
 import Track from './pages/Track';
 
 import AdminDashboard from './pages/admin/Dashboard';
@@ -70,6 +71,7 @@ function AppShell() {
         <Route path="/my-orders" element={<ProtectedRoute><MyOrders /></ProtectedRoute>} />
         <Route path="/quote" element={<Quote />} />
         <Route path="/quote/design" element={<DesignQuote />} />
+        <Route path="/quote/sample/:token" element={<QuoteDesignSample />} />
         <Route path="/track" element={<Track />} />
         <Route path="/pickup" element={<Pickup />} />
 

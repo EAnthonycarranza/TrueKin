@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const {
   createQuote,
+  getQuoteDesignPreview,
   adminListQuotes,
   adminGetQuote,
   adminUpdateQuoteStatus,
@@ -15,6 +16,7 @@ router.post('/', upload.fields([
   { name: 'designPreview', maxCount: 1 },
   { name: 'designSidePreviews', maxCount: 3 },
 ]), createQuote);
+router.get('/preview/:token', getQuoteDesignPreview);
 router.get('/admin/all', auth, adminOnly, adminListQuotes);
 router.get('/admin/:id', auth, adminOnly, adminGetQuote);
 router.put('/admin/:id/status', auth, adminOnly, adminUpdateQuoteStatus);

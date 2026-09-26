@@ -33,6 +33,7 @@ test('a saved custom quote uses the requested sender and includes proof, concept
     name: 'Alex <Customer>',
     email: 'alex@example.test',
     quantity: 50,
+    designPreviewToken: 'a'.repeat(48),
     designPreviewUrl: '/uploads/customer-proof.png',
     designSidePreviews: [
       { side: 'front', imageUrl: '/uploads/customer-proof.png' },
@@ -74,4 +75,7 @@ test('a saved custom quote uses the requested sender and includes proof, concept
   assert.match(message.html, /50 custom stickers/);
   assert.match(message.html, /Alex &lt;Customer&gt;/);
   assert.match(message.text, /Quote total: \$125\.00/);
+  assert.match(message.html, /https:\/\/truekin\.example\.test\/quote\/sample\/a{48}/);
+  assert.match(message.html, /View your interactive 3D sample/);
+  assert.match(message.text, /Interactive 3D design sample: https:\/\/truekin\.example\.test\/quote\/sample\/a{48}/);
 });

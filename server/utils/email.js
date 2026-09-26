@@ -465,6 +465,9 @@ exports.sendQuoteProposal = async function sendQuoteProposal(quote) {
   const reference = proposal.quoteNumber || `TKQ-${quote._id.toString().slice(-6).toUpperCase()}`;
   const baseUrl = (process.env.CLIENT_URL || '').replace(/\/$/, '');
   const imageUrl = (value) => /^https?:\/\//i.test(value) ? value : `${baseUrl}${value}`;
+  const designSampleUrl = baseUrl && quote.designPreviewToken
+    ? `${baseUrl}/quote/sample/${encodeURIComponent(quote.designPreviewToken)}`
+    : '';
   const concepts = [
     ...getStudioPreviews(quote).map((preview) => ({ label: `Your studio design · ${preview.label}`, imageUrl: preview.imageUrl })),
     ...(proposal.concepts || []),
@@ -488,6 +491,7 @@ exports.sendQuoteProposal = async function sendQuoteProposal(quote) {
     ${panel(`<div style="font-family:${MONO};font-size:13px;color:${C.muted};">${escapeHtml(reference)}</div><div style="font-family:${SANS};font-size:12px;color:${C.body};margin-top:8px;">Valid through ${escapeHtml(proposal.validUntil || 'confirmation with Truekin')}</div>`)}
     ${productBlock}
     ${rows.length ? `${label('Design concepts')}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">${rows.join('')}</table>` : ''}
+    ${designSampleUrl ? `${button(designSampleUrl, 'View your interactive 3D sample')}<p style="text-align:center;color:${C.muted};font-size:11px;margin:-10px 0 28px;font-family:${SANS};">Rotate the sample, zoom in, and switch between every submitted side.</p>` : ''}
     ${label('Project pricing')}
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">${itemRows}</table>
     ${panel(`<div style="font-family:${SANS};font-size:12px;color:${C.body};line-height:1.8;">Items + setup: ${money(proposal.subtotal)}${proposal.shipping ? `<br/>Shipping: ${money(proposal.shipping)}` : ''}${proposal.discount ? `<br/>Discount: -${money(proposal.discount)}` : ''}${proposal.tax ? `<br/>Tax: ${money(proposal.tax)}` : ''}</div><div style="border-top:1px solid ${C.line};margin-top:10px;padding-top:10px;font-family:${SANS};font-size:19px;font-weight:800;color:${C.ink};">Quote total <span style="float:right;">${money(proposal.total)}</span></div>`, { background: C.card })}
@@ -504,6 +508,7 @@ exports.sendQuoteProposal = async function sendQuoteProposal(quote) {
     productPreview ? `Proposed product: ${productPreview.title}` : null,
     productPreview?.description || null,
     productPreview && quote.quantity ? `Requested quantity: ${quote.quantity}` : null,
+    designSampleUrl ? `Interactive 3D design sample: ${designSampleUrl}` : null,
     '',
     'PROJECT PRICING',
     ...proposal.lineItems.map((item) => `${item.description} — ${item.quantity} x ${money(item.unitPrice)} = ${money(item.quantity * item.unitPrice)}`),

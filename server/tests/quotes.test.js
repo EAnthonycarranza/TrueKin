@@ -11,7 +11,9 @@ const quoteRoutes = require('../routes/quotes');
 
 const response = () => ({
   code: 200,
+  headers: {},
   status(code) { this.code = code; return this; },
+  set(name, value) { this.headers[name] = value; return this; },
   json(data) { this.data = data; return this; },
 });
 
@@ -113,6 +115,7 @@ test('studio quote stores artwork and specifications without computing or return
   assert.equal(created.requestType, 'studio');
   assert.equal(created.productType, 'sticker');
   assert.equal(created.designData, JSON.stringify(design));
+  assert.match(created.designPreviewToken, /^[a-f0-9]{48}$/);
   assert.equal(created.designPreviewUrl, '/uploads/quote-design-test.png');
   assert.deepEqual(created.designSidePreviews, [{ side: 'front', imageUrl: '/uploads/quote-design-test.png' }]);
   assert.equal(created.specifications.rush, true);
@@ -123,6 +126,43 @@ test('studio quote stores artwork and specifications without computing or return
   assert.equal(email.sendQuoteRequestConfirmation.mock.callCount(), 1);
   assert.equal(email.sendQuoteRequestConfirmation.mock.calls[0].arguments[0].designPreviewUrl, '/uploads/quote-design-test.png');
   assert.equal(res.data.confirmationEmailSent, true);
+});
+
+test('a private preview token returns only the submitted studio design and side mockups', async () => {
+  const token = 'a'.repeat(48);
+  const design = { studio: 'truekin-unified', version: 1, productType: 'tshirt', prints: { front: 'data:image/png;base64,abc' } };
+  mock.method(Quote, 'findOne', async (filter) => {
+    assert.deepEqual(filter, { designPreviewToken: token, requestType: 'studio' });
+    return {
+      productType: 'tshirt', designData: JSON.stringify(design), email: 'private@example.test', details: 'Private notes',
+      designSidePreviews: [{ side: 'front', imageUrl: '/uploads/front.png' }],
+      adminQuote: { quoteNumber: 'TKQ-SAFE', total: 9900, internalNotes: 'Never expose this' },
+    };
+  });
+  const res = response();
+  await quotes.getQuoteDesignPreview({ params: { token } }, res);
+  assert.equal(res.code, 200);
+  assert.equal(res.headers['Cache-Control'], 'private, no-store');
+  assert.deepEqual(res.data.sample, {
+    productType: 'tshirt', design,
+    sidePreviews: [{ side: 'front', label: 'Front', imageUrl: '/uploads/front.png' }],
+    quoteNumber: 'TKQ-SAFE',
+  });
+  assert.equal(JSON.stringify(res.data).includes('private@example.test'), false);
+  assert.equal(JSON.stringify(res.data).includes('9900'), false);
+  assert.equal(JSON.stringify(res.data).includes('Never expose this'), false);
+});
+
+test('invalid or unknown design preview links reveal no quote information', async () => {
+  mock.method(Quote, 'findOne', async () => null);
+  const malformed = response();
+  await quotes.getQuoteDesignPreview({ params: { token: 'not-a-token' } }, malformed);
+  assert.equal(malformed.code, 404);
+  assert.equal(Quote.findOne.mock.callCount(), 0);
+  const missing = response();
+  await quotes.getQuoteDesignPreview({ params: { token: 'b'.repeat(48) } }, missing);
+  assert.equal(missing.code, 404);
+  assert.match(missing.data.message, /unavailable/i);
 });
 
 test('shirt studio quotes preserve a mockup for every side in the admin brief', async () => {
@@ -306,6 +346,24 @@ test('sending a saved proposal only marks it quoted after delivery succeeds', as
   assert.equal(sent.code, 200);
   assert.equal(quote.status, 'quoted');
   assert.ok(quote.adminQuote.lastSentAt instanceof Date);
+});
+
+test('sending a legacy studio proposal saves a private 3D preview token before emailing its link', async () => {
+  let saveCount = 0;
+  let tokenSeenByEmail = '';
+  const quote = {
+    _id: '507f1f77bcf86cd799439011', requestType: 'studio', productType: 'tshirt', designData: '{}',
+    email: 'alex@example.test', status: 'new', adminQuote: { lineItems: [{ description: 'Shirts', quantity: 1, unitPrice: 200 }] },
+    save: async () => { saveCount += 1; },
+  };
+  mock.method(Quote, 'findById', async () => quote);
+  mock.method(email, 'sendQuoteProposal', async (sentQuote) => { tokenSeenByEmail = sentQuote.designPreviewToken; return true; });
+  const res = response();
+  await quotes.adminSendQuoteProposal({ params: { id: quote._id } }, res);
+  assert.equal(res.code, 200);
+  assert.match(tokenSeenByEmail, /^[a-f0-9]{48}$/);
+  assert.equal(saveCount, 2);
+  assert.equal(quote.status, 'quoted');
 });
 
 test('quotes reject missing, mismatched, and low-score reCAPTCHA results', async () => {

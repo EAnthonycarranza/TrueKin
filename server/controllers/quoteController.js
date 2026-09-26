@@ -6,7 +6,7 @@ const SiteSettings = require('../models/SiteSettings');
 const storage = require('../utils/storage');
 const { RECAPTCHA_ACTIONS, verifyRecaptcha } = require('../utils/recaptcha');
 const mail = require('../utils/email');
-const { STUDIO_SIDES, getStudioPreviews } = require('../utils/quoteStudioPreviews');
+const { STUDIO_SIDES, createStudioPreviewToken, getStudioPreviews } = require('../utils/quoteStudioPreviews');
 
 function requestError(message, status = 400) {
   return Object.assign(new Error(message), { status });
@@ -144,6 +144,7 @@ exports.createQuote = async (req, res) => {
       neededBy: text(neededBy, 80),
       details: text(details, 4000),
       designData,
+      designPreviewToken: requestType === 'studio' ? createStudioPreviewToken() : '',
       designPreviewUrl: designSidePreviews[0]?.imageUrl || '',
       designSidePreviews,
       specifications,
@@ -168,6 +169,29 @@ exports.createQuote = async (req, res) => {
   } catch (error) {
     await Promise.all(storedImages.map((imageUrl) => storage.deleteImage(imageUrl).catch(() => {})));
     res.status(error.status || 500).json({ message: error.message });
+  }
+};
+
+exports.getQuoteDesignPreview = async (req, res) => {
+  try {
+    const token = String(req.params.token || '').toLowerCase();
+    if (!/^[a-f0-9]{48}$/.test(token)) return res.status(404).json({ message: 'This design sample is unavailable.' });
+    const quote = await Quote.findOne({ designPreviewToken: token, requestType: 'studio' });
+    if (!quote?.designData) return res.status(404).json({ message: 'This design sample is unavailable.' });
+    let design;
+    try { design = JSON.parse(quote.designData); }
+    catch { return res.status(404).json({ message: 'This design sample is unavailable.' }); }
+    res.set('Cache-Control', 'private, no-store');
+    res.json({
+      sample: {
+        productType: quote.productType,
+        design,
+        sidePreviews: getStudioPreviews(quote),
+        quoteNumber: quote.adminQuote?.quoteNumber || '',
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -208,6 +232,9 @@ exports.adminSaveQuoteBuilder = async (req, res) => {
   try {
     const quote = await Quote.findById(req.params.id);
     if (!quote) return res.status(404).json({ message: 'Quote not found.' });
+    if (quote.requestType === 'studio' && quote.designData && !quote.designPreviewToken) {
+      quote.designPreviewToken = createStudioPreviewToken();
+    }
     const payload = parseJson(req.body.payload, 'The quote builder data', req.body || {});
     const rawItems = Array.isArray(payload.lineItems) ? payload.lineItems : [];
     if (!rawItems.length) throw requestError('Add at least one line item to the quote.');
@@ -339,6 +366,10 @@ exports.adminSendQuoteProposal = async (req, res) => {
     const quote = await Quote.findById(req.params.id);
     if (!quote) return res.status(404).json({ message: 'Quote not found.' });
     if (!quote.adminQuote?.lineItems?.length) throw requestError('Save the quote with at least one priced line item before sending it.');
+    if (quote.requestType === 'studio' && quote.designData && !quote.designPreviewToken) {
+      quote.designPreviewToken = createStudioPreviewToken();
+      await quote.save();
+    }
     const sent = await mail.sendQuoteProposal(quote);
     if (!sent) throw requestError('The quote email could not be sent. Check mail settings and try again.', 503);
     quote.status = 'quoted';

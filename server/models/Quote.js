@@ -97,6 +97,12 @@ const quoteSchema = new mongoose.Schema({
     type: String,
     default: null,
   },
+  designPreviewToken: {
+    type: String,
+    trim: true,
+    maxlength: 48,
+    default: '',
+  },
   designPreviewUrl: {
     type: String,
     trim: true,
